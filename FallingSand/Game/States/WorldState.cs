@@ -42,16 +42,23 @@ public class WorldState : GameState
     private readonly KeyCondition pauseSim = new KeyCondition(Keys.P);
     private readonly KeyCondition stepSim = new KeyCondition(Keys.O);
     private readonly KeyCondition toggleCells = new KeyCondition(Keys.C);
+    private readonly KeyCondition toggleRects = new KeyCondition(Keys.V);
 
     private Shapes shapes;
     private Liquid sand;
     private Liquid water;
+    private Liquid dirt;
     private Liquid stone;
+    private Gas smoke;
+
+    private List<(Element, int)> spawnables;
+    private int spawnIndex = 0;
 
     public Vertical debugRoot;
     public List<DebugTextEntry> debugText = new List<DebugTextEntry>();
     private double deltaTime = 0.0f;
-    private bool drawCells = true;
+    private bool drawCells = false;
+    private bool drawRects = false;
 
     public WorldState(StateManager sm) : base(sm)
     {
@@ -83,29 +90,48 @@ public class WorldState : GameState
         debugRoot.Offset = new Vector2(30, 0);
         GUI.Root.AddChild(debugRoot);
 
-        sand = new Liquid();
+        sand = new Liquid("Sand");
         sand.density = 5;
         sand.color = new Color(213f / 255f, 185f / 255f, 113f / 255f);
-        sand.isSand = true;
-        water = new Liquid();
+        sand.liquid_isSand = true;
+        sand.liquid_inertialResistance = 10;
+        dirt = new Liquid("Dirt");
+        dirt.color = new Color(0.318f, 0.2f, 0.03f);
+        dirt.density = 10;
+        dirt.liquid_isSand = true;
+        dirt.liquid_inertialResistance = 50;
+        dirt.liquid_gravity = 2;
+        water = new Liquid("Water");
         water.density = 1;
         water.color = new Color(20f / 255f, 100f / 255f, 171f / 255f);
-        water.dispersion = 5;
-        stone = new Liquid();
+        water.liquid_dispersion = 5;
+        water.liquid_gravity = 3;
+        stone = new Liquid("Stone");
         stone.density = 50;
         stone.color = new Color(0.4f, 0.4f, 0.4f);
-        stone.isStatic = true;
+        stone.liquid_isStatic = true;
+        smoke = new Gas("Smoke");
+        smoke.density = 1;
+        smoke.color = new Color(0.3f, 0.3f, 0.3f);
 
-        world = new SandWorld(new Point(0, 0), new Point(256, 256), 64);
+        spawnables = new List<(Element, int)>();
+        spawnables.Add((sand, 100));
+        spawnables.Add((dirt, 35));
+        spawnables.Add((water, 35));
+        spawnables.Add((stone, 100));
+        spawnables.Add((smoke, 35));
+
+        world = new SandWorld(new Point(0, 0), new Point(512, 512), 64);
         Add(new Entity() { world });
 
         AddDebugLabel(debugRoot, () => string.Format("{0:0.0} ms ({1:0.} fps)", deltaTime * 1000.0f, 1.0f / deltaTime));
+        AddDebugLabel(debugRoot, () => $"Selected Material: {spawnables[spawnIndex].Item1.name}");
     }
 
     public void AddDebugLabel(Vertical vert, Func<string> valueFunc)
     {
         FontSystem font = Assets.GetFontSystem("fs-default");
-        Label label = new Label(font, string.Empty, Color.AntiqueWhite, 18);
+        Label label = new Label(font, string.Empty, Color.Green, 18);
         label.TightLineHeight = true;
         DebugTextEntry entry = new DebugTextEntry(label, valueFunc);
         debugText.Add(entry);
@@ -134,9 +160,12 @@ public class WorldState : GameState
                 shapes.DrawBox(chunk.chunkX, chunk.chunkY, chunk.size, chunk.size, Color.DarkGray, 1f);
             }
         }
-        foreach (WorldChunk chunk in world.matrix.chunks)
+        if (drawRects)
         {
-            shapes.DrawBox(Rectangle.Union(chunk.dirtyRect, chunk.prevDirtyRect), Color.Red, 0.5f);
+            foreach (WorldChunk chunk in world.matrix.chunks)
+            {
+                shapes.DrawBox(Rectangle.Union(chunk.dirtyRect, chunk.prevDirtyRect), Color.Red, 0.5f);
+            }
         }
         shapes.End();
     }
@@ -150,10 +179,23 @@ public class WorldState : GameState
             brushSize = Rubedo.Lib.Math.Clamp(brushSize + scroll, 0, 16);
         }
 
-        SpawnCell(leftClickCondition.Pressed(), leftClickCondition.Held(), sand, 35);
-        SpawnCell(rightClickCondition.Pressed(), rightClickCondition.Held(), water, 35);
-        SpawnCell(middleClickCondition.Pressed(), middleClickCondition.Held(), stone, 101);
+        if (rightClickCondition.Pressed())
+        {
+            spawnIndex = spawnIndex == spawnables.Count - 1 ? 0 : spawnIndex + 1;
+        }
+        (Element type, int chance) = spawnables[spawnIndex];
+        SpawnCell(leftClickCondition.Pressed(), leftClickCondition.Held(), type, chance);
         SpawnCell(shiftLeftClickCondition.Pressed(), shiftLeftClickCondition.Held(), null, 101);
+
+        if (middleClickCondition.Pressed())
+        {
+            Point mouse = InputManager.MouseWorldPosition().ToPoint();
+            Entity entity = new Entity(mouse.ToVector2())
+            {
+                new Spout(world, spawnables[spawnIndex].Item1, brushSize)
+            };
+            Add(entity);
+        }
 
         if (cameraLeft.Pressed() || cameraLeft.Held())
             MainCamera.XY += new Vector2(-1, 0);
@@ -189,6 +231,10 @@ public class WorldState : GameState
         if (toggleCells.Pressed())
         {
             drawCells = !drawCells;
+        }
+        if (toggleRects.Pressed())
+        {
+            drawRects = !drawRects;
         }
     }
 

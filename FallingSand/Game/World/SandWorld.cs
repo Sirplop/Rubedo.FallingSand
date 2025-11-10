@@ -5,7 +5,6 @@ using Rubedo;
 using Rubedo.Components;
 using Rubedo.Graphics;
 using Rubedo.Lib;
-using Rubedo.Physics2D.Common;
 
 namespace FallingSand.Game.World;
 
@@ -16,14 +15,13 @@ public class SandWorld : RenderableComponent
 {
     Point worldMin;
     Point worldMax;
-    public static Vector2 Gravity = new Vector2(0, 5f);
 
     public SandMatrix matrix;
     private Color[] drawData;
     private readonly Texture2D texture;
 
     private float accumulatedDelta = 0;
-    public const float SAND_UPDATE_TIME = 1f / 100f;
+    public const float SAND_UPDATE_TIME = 1f / 50;
     public bool doTick = true;
     public bool stepTick = true;
 

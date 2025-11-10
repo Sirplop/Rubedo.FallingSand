@@ -1,6 +1,10 @@
 ﻿using FallingSand.Game.Elements;
 using Microsoft.Xna.Framework;
+using Rubedo;
+using Rubedo.Lib;
 using Rubedo.Lib.Extensions;
+using Rubedo.Lib.StateMachine;
+using System.Diagnostics;
 
 namespace FallingSand.Game.World;
 
@@ -16,6 +20,7 @@ public class WorldChunk
 
     public Rectangle dirtyRect;
     public Rectangle prevDirtyRect;
+    public Rectangle renderRect;
 
     public readonly int size;
 
@@ -38,22 +43,10 @@ public class WorldChunk
             shuffledX[i] = i;
             movedWithFrame[i] = false;
         }
+        renderRect = new Rectangle(chunkX, chunkY, size, size);
     }
-
     private void ShuffleXIndices(int startX, int endX, int startY, int endY)
     {
-        /*
-        for (int y = startY; y < endY; y++)
-        {
-            for (int x = startX; x < endX; x++)
-            {
-                int i = GetIndex(x, y);
-                shuffledX[i] = i;
-            }
-        }
-        shuffledX.FYRectShuffle(startX % size, startY % size, endX - startX, endY - startY);
-        */
-        
         for (int y = startY; y < endY; y++)
         {
             for (int x = startX; x < endX; x++)
@@ -69,10 +62,12 @@ public class WorldChunk
     public void Step(SandMatrix matrix)
     {
         Rectangle.Union(ref dirtyRect, ref prevDirtyRect, out Rectangle rect);
+        if (renderRect.IsEmpty)
+            renderRect = rect;
+        else
+            Rectangle.Union(ref renderRect, ref rect, out renderRect);
 
         prevDirtyRect = dirtyRect;
-        dirtyRect.X = chunkX;
-        dirtyRect.Y = chunkY;
         dirtyRect.Width = 0;
         dirtyRect.Height = 0;
 
@@ -82,9 +77,9 @@ public class WorldChunk
         int finY = Rubedo.Lib.Math.Clamp(rect.Bottom, chunkY, chunkY + size);
         if (dirtyY == finY && dirtyX == finX)
             return; //nothing to do.
-        
-        ShuffleXIndices(dirtyX, finX, dirtyY, finY);
 
+        ShuffleXIndices(dirtyX, finX, dirtyY, finY);
+        //ShuffleYIndices(dirtyY, finY);
         for (int y = dirtyY; y < finY; y++)
         {
             for (int x = dirtyX; x < finX; x++)
@@ -183,5 +178,24 @@ public class WorldChunk
     {
         elements[index] = cell;
         movedWithFrame[index] = true;
+    }
+
+
+    public void Draw(ref Color[] data, int worldWidth)
+    {
+        int dirtyX = Rubedo.Lib.Math.Clamp(renderRect.X, chunkX, chunkX + size);
+        int finX = Rubedo.Lib.Math.Clamp(renderRect.Right, chunkX, chunkX + size);
+        int dirtyY = Rubedo.Lib.Math.Clamp(renderRect.Y, chunkY, chunkY + size);
+        int finY = Rubedo.Lib.Math.Clamp(renderRect.Bottom, chunkY, chunkY + size);
+
+        for (int y = dirtyY; y < finY; y++)
+        {
+            for (int x = dirtyX; x < finX; x++)
+            {
+                data[y * worldWidth + x] = GetCell(x, y).color;
+            }
+        }
+        renderRect.Width = 0;
+        renderRect.Height = 0;
     }
 }

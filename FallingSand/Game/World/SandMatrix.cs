@@ -15,9 +15,9 @@ namespace FallingSand.Game.World;
 /// </summary>
 public class SandMatrix
 {
-
     public Point worldMin;
     public Point worldMax;
+    public int gravity = 1;
 
     public int chunkSize;
 
@@ -57,6 +57,11 @@ public class SandMatrix
         {
             chunks[i].ResetMovedWithFrame();
         }
+        /*
+        for (int i = 0; i < chunks.Count; i++)
+        {
+            chunks[i].Step(this);
+        }*/
         //interleave the chunk update order so we don't end up with any left-right bias.
         for (int i = flip ? 1 : 0; i < chunks.Count; i += 2)
         {
@@ -71,23 +76,13 @@ public class SandMatrix
 
     public void Draw(ref Color[] data, Point cameraPosition, Texture2D texture)
     {
-        int xStart = worldMin.X;
-        int xEnd = worldMax.X;
-        int y = worldMin.Y;
-        int yEnd = worldMax.Y;
-
-        int i = 0;
-        for (; y < yEnd; y++)
+        for (int i = 0; i < chunks.Count; i++)
         {
-            for (int x = xStart; x < xEnd; x++)
-            {
-                data[i++] = GetCell(x, y).color;
-            }
+            WorldChunk chunk = chunks[i];
+            chunk.Draw(ref data, worldMax.X);
         }
-
         texture.SetData(data);
     }
-
 
     public long GetChunkLocation(int x, int y)
     {
@@ -101,11 +96,19 @@ public class SandMatrix
         regY = (y / chunkSize) + (y >> 31);
     }
 
+    private WorldChunk _cachedChunk = null;
+    private long _cachedChunkCoord = 0;
     public WorldChunk GetChunk(int x, int y)
     {
         long chunk = GetChunkLocation(x, y);
+        if (_cachedChunk != null && chunk == _cachedChunkCoord)
+            return _cachedChunk;
         if (chunkLookup.TryGetValue(chunk, out WorldChunk value))
+        {
+            _cachedChunk = value;
+            _cachedChunkCoord = chunk;
             return value;
+        }
         return null;
     }
     public bool TryGetCell(int x, int y, out Cell target)
@@ -132,6 +135,15 @@ public class SandMatrix
         return exists;
     }
 
+    public void SetFreeFalling(int x, int y)
+    {
+        Cell cell = GetCell(x, y);
+        if (cell != null && cell.element is Liquid liq)
+        {
+            cell.SetFreeFalling(liq.liquid_inertialResistance < Rubedo.Lib.Random.Percent || cell.freeFalling);
+        }
+    }
+
     public bool InBounds(int x, int y)
     {
         return x >= worldMin.X && x < worldMax.X && y >= worldMin.Y && y < worldMax.Y;
@@ -150,6 +162,7 @@ public class SandMatrix
 
         current.element = element;
         current.color = element.color * Rubedo.Lib.Random.Range(0.9f, 1.1f);
+        current.freeFalling = true;
         SetCell(x, y, current);
         return true;
     }
