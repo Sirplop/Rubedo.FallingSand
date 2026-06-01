@@ -32,7 +32,7 @@ public abstract class Element
     public int liquid_inertialResistance = 50; //[0, 100] how likely is this element to become freefalling when something passes by?
     public float liquid_friction = 0.4f; //how fast does this element slow down?
 
-    public abstract void Step(SandMatrix matrix, Cell cell);
+    public abstract void Step(WorldChunk caller, Cell cell);
 
    
 }

@@ -106,6 +106,7 @@ public class WorldState : GameState
         water.color = new Color(20f / 255f, 100f / 255f, 171f / 255f);
         water.liquid_dispersion = 5;
         water.liquid_gravity = 3;
+        water.liquid_inertialResistance = -1;
         stone = new Liquid("Stone");
         stone.density = 50;
         stone.color = new Color(0.4f, 0.4f, 0.4f);
@@ -121,7 +122,7 @@ public class WorldState : GameState
         spawnables.Add((stone, 100));
         spawnables.Add((smoke, 35));
 
-        world = new SandWorld(new Point(0, 0), new Point(512, 512), 64);
+        world = new SandWorld(64, 8);
         Add(new Entity() { world });
 
         AddDebugLabel(debugRoot, () => string.Format("{0:0.0} ms ({1:0.} fps)", deltaTime * 1000.0f, 1.0f / deltaTime));
@@ -155,16 +156,23 @@ public class WorldState : GameState
         shapes.Begin(MainCamera);
         if (drawCells)
         {
-            foreach (WorldChunk chunk in world.matrix.chunks)
+            foreach (WorldRegion region in world.regions)
             {
-                shapes.DrawBox(chunk.chunkX, chunk.chunkY, chunk.size, chunk.size, Color.DarkGray, 1f);
+                foreach (WorldChunk chunk in region.chunks)
+                {
+                    shapes.DrawBox(chunk.chunkX, chunk.chunkY, chunk.size, chunk.size, Color.DarkGray, 1f);
+                }
             }
         }
         if (drawRects)
         {
-            foreach (WorldChunk chunk in world.matrix.chunks)
+            foreach (WorldRegion region in world.regions)
             {
-                shapes.DrawBox(Rectangle.Union(chunk.dirtyRect, chunk.prevDirtyRect), Color.Red, 0.5f);
+                foreach (WorldChunk chunk in region.chunks)
+                {
+                    if (chunk.DirtyRect.Height != 0 && chunk.DirtyRect.Width != 0)
+                    shapes.DrawBox(chunk.DirtyRect, Color.Red, 0.5f);
+                }
             }
         }
         shapes.End();
@@ -246,7 +254,7 @@ public class WorldState : GameState
             {
                 Point curPos = InputManager.MouseWorldPosition().ToPoint();
                 Point prevPos = InputManager.PreviousMouseWorldPosition().ToPoint();
-                world.matrix.IterateAndApplyBetweenPoints(prevPos, curPos, (x, y) => SpawnCellRun(x, y, type, chance, brushSize));
+                world.IterateAndApplyBetweenPoints(prevPos, curPos, (x, y) => SpawnCellRun(x, y, type, chance, brushSize));
             }
             else
             {

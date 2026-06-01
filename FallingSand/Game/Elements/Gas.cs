@@ -13,8 +13,8 @@ public class Gas : Element
         this.name = name;
     }
 
-    public override void Step(SandMatrix matrix, Cell cell)
+    public override void Step(WorldChunk caller, Cell cell)
     {
-        CellBehaviour.TryRise(matrix, cell);
+        CellBehaviour.TryRise(caller, cell);
     }
 }

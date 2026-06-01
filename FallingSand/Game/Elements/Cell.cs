@@ -10,7 +10,7 @@ namespace FallingSand.Game.Elements;
 /// </summary>
 public class Cell
 {
-    public const byte FREE_FALLING_THRESHOLD = 3; //number of frames the pixel must not move to reset free falling.
+    public const byte FREE_FALLING_THRESHOLD = 2; //number of frames the pixel must not move to reset free falling.
 
     public Element element;
     public int x;
@@ -38,76 +38,75 @@ public class Cell
         freeFallingCount = 0;
     }
 
-    public void SwapPositions(SandMatrix matrix, Cell toSwap)
+    public void SwapPositions(WorldChunk caller, Cell toSwap)
     {
-        SwapPositions(matrix, toSwap, toSwap.x, toSwap.y);
+        SwapPositions(caller, toSwap, toSwap.x, toSwap.y);
     }
-    public void SwapPositions(SandMatrix matrix, int x, int y)
+    public void SwapPositions(WorldChunk caller, int x, int y)
     {
         if (this.x == x && this.y == y)
             return;
 
-        Cell cell = matrix.GetCell(x, y);
-        matrix.SetCell(this.x, this.y, cell);
-        matrix.SetCell(x, y, this);
+        if (!caller.TryGetCell(x, y, out Cell cell))
+            return; //failed to swap
+        caller.SetCell(cell, this.x, this.y);
+        caller.SetCell(cell, x, y);
 
         this.freeFalling = true;
-        matrix.SetFreeFalling(x + 1, y);
-        matrix.SetFreeFalling(x - 1, y);
+        caller.SetFreeFalling(caller, x + 1, y);
+        caller.SetFreeFalling(caller, x - 1, y);
     }
 
-    private void SwapPositions(SandMatrix matrix, Cell toSwap, int toSwapX, int toSwapY)
+    private void SwapPositions(WorldChunk caller, Cell toSwap, int toSwapX, int toSwapY)
     {
         if (this.x == toSwapX && this.y == toSwapY)
             return;
 
-        if (!matrix.SetCell(this.x, this.y, toSwap))
-            throw new System.IndexOutOfRangeException();
-        if (!matrix.SetCell(toSwapX, toSwapY, this))
-            throw new System.IndexOutOfRangeException();
+        caller.SetCell(toSwap, this.x, this.y);
+        caller.SetCell(this, toSwapX, toSwapY);
 
         this.freeFalling = true;
-        matrix.SetFreeFalling(toSwapX + 1, toSwapY);
-        matrix.SetFreeFalling(toSwapX - 1, toSwapY);
+        caller.SetFreeFalling(caller, toSwapX + 1, toSwapY);
+        caller.SetFreeFalling(caller, toSwapX - 1, toSwapY);
     }
 
-    public void Displace(SandMatrix matrix, Cell toSwap)
+    public void Displace(WorldChunk caller, Cell toSwap)
     {
-        Displace(matrix, toSwap, toSwap.x, toSwap.y);
+        Displace(caller, toSwap, toSwap.x, toSwap.y);
     }
-    private void Displace(SandMatrix matrix, Cell target, int targetX, int targetY)
+    private void Displace(WorldChunk caller, Cell target, int targetX, int targetY)
     {
         if (this.x == targetX && this.y == targetY)
         {
             return;
         }
-        Displace(matrix, target, this);
-        SwapPositions(matrix, target);
+        Displace(caller, target, this);
+        SwapPositions(caller, target);
     }
 
-    private static bool Displace(SandMatrix matrix, Cell cell, Cell source)
+    private static bool Displace(WorldChunk caller, Cell cell, Cell source)
     {
-        bool upFree = matrix.TryGetCell(cell.x, cell.y + 1, out Cell up) && up != source && up.IsEmpty;
-        bool upLeftFree = matrix.TryGetCell(cell.x - 1, cell.y + 1, out Cell upLeft) && upLeft != source && upLeft.IsEmpty;
-        bool upRightFree = matrix.TryGetCell(cell.x + 1, cell.y + 1, out Cell upRight) && upRight != source && upRight.IsEmpty;
+        bool upFree = caller.TryGetCell(cell.x, cell.y + 1, out Cell up) && up != source && up.IsEmpty;
+        bool upLeftFree = caller.TryGetCell(cell.x - 1, cell.y + 1, out Cell upLeft) && upLeft != source && upLeft.IsEmpty;
+        bool upRightFree = caller.TryGetCell(cell.x + 1, cell.y + 1, out Cell upRight) && upRight != source && upRight.IsEmpty;
 
         int flip = Rubedo.Lib.Random.Range(0, 3);
         switch (flip)
         {
             case 0:
-                if (upFree) cell.SwapPositions(matrix, up);
-                else if (upLeftFree) cell.SwapPositions(matrix, upLeft);
-                else if (upRightFree) cell.SwapPositions(matrix, upRight);
+                if (upFree) cell.SwapPositions(caller, up);
+                else if (upLeftFree) cell.SwapPositions(caller, upLeft);
+                else if (upRightFree) cell.SwapPositions(caller, upRight);
                 break;
             case 1:
-                if (upLeftFree) cell.SwapPositions(matrix, upLeft);
-                else if (upRightFree) cell.SwapPositions(matrix, upRight);
-                else if (upFree) cell.SwapPositions(matrix, up);
+                if (upLeftFree) cell.SwapPositions(caller, upLeft);
+                else if (upRightFree) cell.SwapPositions(caller, upRight);
+                else if (upFree) cell.SwapPositions(caller, up);
                 break;
             case 2:
-                if (upRightFree) cell.SwapPositions(matrix, upRight);
-                else if (upFree) cell.SwapPositions(matrix, up);
-                else if (upLeftFree) cell.SwapPositions(matrix, upLeft);
+                if (upRightFree) cell.SwapPositions(caller, upRight);
+                else if (upFree) cell.SwapPositions(caller, up);
+                else if (upLeftFree) cell.SwapPositions(caller, upLeft);
                 break;
         }
         return upFree || upLeftFree || upRightFree;
