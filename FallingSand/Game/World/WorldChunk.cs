@@ -241,7 +241,7 @@ public class WorldChunk
         WorldChunk chunk = GetMultiChunk(x, y);
         cell.x = x;
         cell.y = y;
-        chunk.SetCell(cell, chunk.GetIndex(x, y));
+        chunk.SetCell(cell, chunk.GetIndex(x, y), chunk != this);
         chunk.ThreadEnvelop(x, y);
 
         if (x - PADDING < chunk.chunkX)
@@ -381,7 +381,7 @@ public class WorldChunk
             dirtyRect.Union(x + PADDING, y + PADDING);
         }
     }
-
+    /*
     public void SetCell(SandWorld matrix, Cell cell, int x, int y)
     {
         SetCell(cell, GetIndex(x, y));
@@ -406,12 +406,12 @@ public class WorldChunk
         }
 
         Envelop(x, y);
+    }*/
 
-    }
-    public void SetCell(Cell cell, int index)
+    public void SetCell(Cell cell, int index, bool moveFlag)
     {
         elements[index] = cell;
-        movedWithFrame[index] = true;
+        movedWithFrame[index] |= moveFlag;
     }
 
     #endregion
