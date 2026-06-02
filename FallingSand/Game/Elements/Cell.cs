@@ -29,7 +29,7 @@ public class Cell
     {
         this.x = x;
         this.y = y;
-        color = Color.White;
+        color = Color.Transparent;
     }
 
     public void SetFreeFalling(bool value)

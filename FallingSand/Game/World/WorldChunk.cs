@@ -10,7 +10,6 @@ using Rubedo.Lib.Extensions;
 using System;
 using System.Collections;
 using System.Collections.Generic;
-using System.Reflection;
 using System.Runtime.CompilerServices;
 
 namespace FallingSand.Game.World;
@@ -24,10 +23,10 @@ public class WorldChunk
     public ref Squirrel3 ChunkRNG => ref chunkRNG;
 
     private readonly BitArray arrivedThisFrame;
+    private readonly Color[] arrivedCellColors; //we use this to "cheat" the update order issue. More at the end of the file.
     private readonly BitArray movedWithFrame;
     private readonly Cell[] elements;
     private readonly RectF cameraIntersection;
-    private Dictionary<int, Color> transitCellColors;
 
     public readonly int chunkX; //starting coordinate in world space
     public readonly int chunkY; //starting coordinate in world space
@@ -62,11 +61,11 @@ public class WorldChunk
         this.chunkX = worldX * size;
         this.chunkY = worldY * size;
         cameraIntersection = new RectF(chunkX - 4, chunkY - 4, size + 8, size + 8);
-        transitCellColors = new Dictionary<int, Color>();
         elements = new Cell[size * size];
         shuffledX = new int[size * size];
         movedWithFrame = new BitArray(size * size, false);
         arrivedThisFrame = new BitArray(size * size, false);
+        arrivedCellColors = new Color[size * size];
         int len = size * size;
         for (int i = 0; i < len; i++)
         {
@@ -74,6 +73,7 @@ public class WorldChunk
             int x = (i % size) + this.chunkX;
             elements[i] = new Cell(x, y);
             shuffledX[i] = i;
+            arrivedCellColors[i] = Color.Transparent;
         }
         renderRect = new Rectangle(chunkX, chunkY, size, size);
         dirtyRectStep = new BitArray(size * size, false);
@@ -419,7 +419,7 @@ public class WorldChunk
         if (moveFlag)
         {
             arrivedThisFrame[index] = true;
-            transitCellColors[index] = cell.color;
+            arrivedCellColors[index] = cell.color;
         }
         movedWithFrame[index] = true;
     }
@@ -433,7 +433,6 @@ public class WorldChunk
             movedWithFrame[i] = false; //these are the same length.
             arrivedThisFrame[i] = false;
         }
-        transitCellColors.Clear();
     }
 
     public bool MovedWithFrame(int x, int y)
@@ -489,7 +488,7 @@ public class WorldChunk
                     int index = GetIndex(x, y);
                     if (arrivedThisFrame[index])
                     {
-                        buffer[i] = transitCellColors[index];
+                        buffer[i] = arrivedCellColors[index];
                     }
                     else
                     {
@@ -504,3 +503,15 @@ public class WorldChunk
         return false;
     }
 }
+
+/*
+    The standard 2x2, 4-phase update cycle has a single flaw that causes considerable artifacting: If a cell moves from one chunk
+    up or down into another, they have the potential of getting "stuck" there for a frame, in that they move down, don't get moved
+    during the chunk they've moved into's phase, then are still there the following frame, which causes the cells above them in the
+    previous chunk to pile up. The game Noita has this issue, though they do what they can by making things fall real fast.
+
+    We cheat this by making cells that move into new chunks double-update, and leave behind a fake cell color that will show up if
+    no other cell takes that place this frame. Double updating would cause a line at chunk borders, so we just paint over it. Lmao.
+    It does mean that there are now fake cells being formed, but only as things move and only for individual frames at a time. It should be
+    pretty hard for a player to notice unless they are looking for it.
+ */

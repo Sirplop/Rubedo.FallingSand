@@ -19156,3 +19156,71 @@
 2026-06-01 21:29:54.3265|INFO|Rubedo.Compiler.Program|Removing old files not present in the new build...
 2026-06-01 21:29:54.3265|INFO|Rubedo.Compiler.Program|Removed 0 old files.
 2026-06-01 21:29:54.3265|INFO|Rubedo.Compiler.Program|Completed build in 0.0063639 seconds.
+2026-06-02 00:21:59.4601|INFO|Rubedo.Compiler.Program|Starting content build from->to:
+                                    'C:\Games\Dev\Monogame\FallingSand\FallingSand\\Content'
+                                    'C:\Games\Dev\Monogame\FallingSand\FallingSand\bin\Debug\net8.0\\Content'
+2026-06-02 00:21:59.4671|INFO|Rubedo.Compiler.Program|Generating Mappings...
+2026-06-02 00:21:59.5322|INFO|Rubedo.Compiler.Program|Creating output directories...
+2026-06-02 00:21:59.5322|INFO|Rubedo.Compiler.Program|Building mappings...
+2026-06-02 00:21:59.5322|INFO|Rubedo.Compiler.Program|Building non-mapped files...
+2026-06-02 00:21:59.5322|INFO|Rubedo.Compiler.Program|Fonts\DroidSans.ttf
+2026-06-02 00:21:59.5322|INFO|Rubedo.Compiler.Program|Fonts\DroidSansJapanese.ttf
+2026-06-02 00:21:59.5322|INFO|Rubedo.Compiler.Program|Fonts\license.txt
+2026-06-02 00:21:59.5322|INFO|Rubedo.Compiler.Program|Fonts\pixel_perfect.ttf
+2026-06-02 00:21:59.5322|INFO|Rubedo.Compiler.Program|Fonts\read me.txt
+2026-06-02 00:21:59.5322|INFO|Rubedo.Compiler.Program|Fonts\Symbola-Emoji.ttf
+2026-06-02 00:21:59.5322|INFO|Rubedo.Compiler.Program|Finished building non-mapped files: 0 files copied, 6 files already up-to-date.
+2026-06-02 00:21:59.5322|INFO|Rubedo.Compiler.Program|Removing old files not present in the new build...
+2026-06-02 00:21:59.5322|INFO|Rubedo.Compiler.Program|Removed 0 old files.
+2026-06-02 00:21:59.5322|INFO|Rubedo.Compiler.Program|Completed build in 0.0679297 seconds.
+2026-06-02 00:22:18.6068|INFO|Rubedo.Compiler.Program|Starting content build from->to:
+                                    'C:\Games\Dev\Monogame\FallingSand\FallingSand\\Content'
+                                    'C:\Games\Dev\Monogame\FallingSand\FallingSand\bin\Debug\net8.0\\Content'
+2026-06-02 00:22:18.6068|INFO|Rubedo.Compiler.Program|Generating Mappings...
+2026-06-02 00:22:18.6068|INFO|Rubedo.Compiler.Program|Creating output directories...
+2026-06-02 00:22:18.6068|INFO|Rubedo.Compiler.Program|Building mappings...
+2026-06-02 00:22:18.6212|INFO|Rubedo.Compiler.Program|Building non-mapped files...
+2026-06-02 00:22:18.6212|INFO|Rubedo.Compiler.Program|Fonts\DroidSans.ttf
+2026-06-02 00:22:18.6212|INFO|Rubedo.Compiler.Program|Fonts\DroidSansJapanese.ttf
+2026-06-02 00:22:18.6212|INFO|Rubedo.Compiler.Program|Fonts\license.txt
+2026-06-02 00:22:18.6212|INFO|Rubedo.Compiler.Program|Fonts\pixel_perfect.ttf
+2026-06-02 00:22:18.6212|INFO|Rubedo.Compiler.Program|Fonts\read me.txt
+2026-06-02 00:22:18.6212|INFO|Rubedo.Compiler.Program|Fonts\Symbola-Emoji.ttf
+2026-06-02 00:22:18.6212|INFO|Rubedo.Compiler.Program|Finished building non-mapped files: 0 files copied, 6 files already up-to-date.
+2026-06-02 00:22:18.6212|INFO|Rubedo.Compiler.Program|Removing old files not present in the new build...
+2026-06-02 00:22:18.6212|INFO|Rubedo.Compiler.Program|Removed 0 old files.
+2026-06-02 00:22:18.6212|INFO|Rubedo.Compiler.Program|Completed build in 0.0065961 seconds.
+2026-06-02 00:30:28.8622|INFO|Rubedo.Compiler.Program|Starting content build from->to:
+                                    'C:\Games\Dev\Monogame\FallingSand\FallingSand\\Content'
+                                    'C:\Games\Dev\Monogame\FallingSand\FallingSand\bin\Debug\net8.0\\Content'
+2026-06-02 00:30:28.8688|INFO|Rubedo.Compiler.Program|Generating Mappings...
+2026-06-02 00:30:28.8688|INFO|Rubedo.Compiler.Program|Creating output directories...
+2026-06-02 00:30:28.8688|INFO|Rubedo.Compiler.Program|Building mappings...
+2026-06-02 00:30:28.8688|INFO|Rubedo.Compiler.Program|Building non-mapped files...
+2026-06-02 00:30:28.8688|INFO|Rubedo.Compiler.Program|Fonts\DroidSans.ttf
+2026-06-02 00:30:28.8688|INFO|Rubedo.Compiler.Program|Fonts\DroidSansJapanese.ttf
+2026-06-02 00:30:28.8688|INFO|Rubedo.Compiler.Program|Fonts\license.txt
+2026-06-02 00:30:28.8688|INFO|Rubedo.Compiler.Program|Fonts\pixel_perfect.ttf
+2026-06-02 00:30:28.8688|INFO|Rubedo.Compiler.Program|Fonts\read me.txt
+2026-06-02 00:30:28.8688|INFO|Rubedo.Compiler.Program|Fonts\Symbola-Emoji.ttf
+2026-06-02 00:30:28.8688|INFO|Rubedo.Compiler.Program|Finished building non-mapped files: 0 files copied, 6 files already up-to-date.
+2026-06-02 00:30:28.8688|INFO|Rubedo.Compiler.Program|Removing old files not present in the new build...
+2026-06-02 00:30:28.8688|INFO|Rubedo.Compiler.Program|Removed 0 old files.
+2026-06-02 00:30:28.8688|INFO|Rubedo.Compiler.Program|Completed build in 0.0060959 seconds.
+2026-06-02 00:32:27.3446|INFO|Rubedo.Compiler.Program|Starting content build from->to:
+                                    'C:\Games\Dev\Monogame\FallingSand\FallingSand\\Content'
+                                    'C:\Games\Dev\Monogame\FallingSand\FallingSand\bin\Debug\net8.0\\Content'
+2026-06-02 00:32:27.3531|INFO|Rubedo.Compiler.Program|Generating Mappings...
+2026-06-02 00:32:27.3531|INFO|Rubedo.Compiler.Program|Creating output directories...
+2026-06-02 00:32:27.3531|INFO|Rubedo.Compiler.Program|Building mappings...
+2026-06-02 00:32:27.3531|INFO|Rubedo.Compiler.Program|Building non-mapped files...
+2026-06-02 00:32:27.3531|INFO|Rubedo.Compiler.Program|Fonts\DroidSans.ttf
+2026-06-02 00:32:27.3531|INFO|Rubedo.Compiler.Program|Fonts\DroidSansJapanese.ttf
+2026-06-02 00:32:27.3531|INFO|Rubedo.Compiler.Program|Fonts\license.txt
+2026-06-02 00:32:27.3531|INFO|Rubedo.Compiler.Program|Fonts\pixel_perfect.ttf
+2026-06-02 00:32:27.3531|INFO|Rubedo.Compiler.Program|Fonts\read me.txt
+2026-06-02 00:32:27.3531|INFO|Rubedo.Compiler.Program|Fonts\Symbola-Emoji.ttf
+2026-06-02 00:32:27.3531|INFO|Rubedo.Compiler.Program|Finished building non-mapped files: 0 files copied, 6 files already up-to-date.
+2026-06-02 00:32:27.3531|INFO|Rubedo.Compiler.Program|Removing old files not present in the new build...
+2026-06-02 00:32:27.3531|INFO|Rubedo.Compiler.Program|Removed 0 old files.
+2026-06-02 00:32:27.3531|INFO|Rubedo.Compiler.Program|Completed build in 0.0062232 seconds.

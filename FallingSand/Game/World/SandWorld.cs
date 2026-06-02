@@ -319,7 +319,7 @@ public class SandWorld : RenderableComponent
         if (current.IsEmpty)
             return false;
         current.element = null;
-        current.color = Color.White;
+        current.color = Color.Transparent;
         SetCell(x, y, current);
         return true;
     }
