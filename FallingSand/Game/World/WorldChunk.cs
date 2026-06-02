@@ -9,6 +9,8 @@ using Rubedo.Lib;
 using Rubedo.Lib.Extensions;
 using System;
 using System.Collections;
+using System.Collections.Generic;
+using System.Reflection;
 using System.Runtime.CompilerServices;
 
 namespace FallingSand.Game.World;
@@ -21,9 +23,11 @@ public class WorldChunk
     private Squirrel3 chunkRNG;
     public ref Squirrel3 ChunkRNG => ref chunkRNG;
 
-    private BitArray movedWithFrame;
+    private readonly BitArray arrivedThisFrame;
+    private readonly BitArray movedWithFrame;
     private readonly Cell[] elements;
     private readonly RectF cameraIntersection;
+    private Dictionary<int, Color> transitCellColors;
 
     public readonly int chunkX; //starting coordinate in world space
     public readonly int chunkY; //starting coordinate in world space
@@ -36,7 +40,7 @@ public class WorldChunk
     private Rectangle renderRect;
     public readonly SandWorld parentMatrix;
 
-    private BitArray dirtyRectStep;
+    private readonly BitArray dirtyRectStep;
 
     public readonly int size;
     public readonly int sizeShift;
@@ -58,9 +62,11 @@ public class WorldChunk
         this.chunkX = worldX * size;
         this.chunkY = worldY * size;
         cameraIntersection = new RectF(chunkX - 4, chunkY - 4, size + 8, size + 8);
+        transitCellColors = new Dictionary<int, Color>();
         elements = new Cell[size * size];
         shuffledX = new int[size * size];
         movedWithFrame = new BitArray(size * size, false);
+        arrivedThisFrame = new BitArray(size * size, false);
         int len = size * size;
         for (int i = 0; i < len; i++)
         {
@@ -68,7 +74,6 @@ public class WorldChunk
             int x = (i % size) + this.chunkX;
             elements[i] = new Cell(x, y);
             shuffledX[i] = i;
-            movedWithFrame[i] = false;
         }
         renderRect = new Rectangle(chunkX, chunkY, size, size);
         dirtyRectStep = new BitArray(size * size, false);
@@ -92,7 +97,7 @@ public class WorldChunk
     #region Multithreaded
     public void MultithreadSetup(SandWorld matrix)
     {
-        ResetMovedWithFrame();
+        ResetUpdateParts();
         for (int y = -1; y <= 1; y++)
         {
             int valY = chunkY + (y * size);
@@ -131,7 +136,7 @@ public class WorldChunk
             for (int x = dirtyX; x < finX; x++)
             {
                 int i = shuffledX[GetIndex(x, y)];
-                if (!movedWithFrame[i] && !elements[i].IsEmpty)
+                if ((!movedWithFrame[i] || arrivedThisFrame[i]) && !elements[i].IsEmpty)
                 {
                     elements[i].element.Step(this, elements[i]);
                 }
@@ -411,15 +416,24 @@ public class WorldChunk
     public void SetCell(Cell cell, int index, bool moveFlag)
     {
         elements[index] = cell;
-        movedWithFrame[index] |= moveFlag;
+        if (moveFlag)
+        {
+            arrivedThisFrame[index] = true;
+            transitCellColors[index] = cell.color;
+        }
+        movedWithFrame[index] = true;
     }
 
     #endregion
 
-    public void ResetMovedWithFrame()
+    public void ResetUpdateParts()
     {
         for (int i = 0; i < movedWithFrame.Length; i++)
-            movedWithFrame[i] = false;
+        {
+            movedWithFrame[i] = false; //these are the same length.
+            arrivedThisFrame[i] = false;
+        }
+        transitCellColors.Clear();
     }
 
     public bool MovedWithFrame(int x, int y)
@@ -472,7 +486,15 @@ public class WorldChunk
                 for (int x = dirtyX; x < finX; x++)
                 {
                     int i = region.GetDrawIndex(x, y);
-                    buffer[i] = GetCell(x, y).color;
+                    int index = GetIndex(x, y);
+                    if (arrivedThisFrame[index])
+                    {
+                        buffer[i] = transitCellColors[index];
+                    }
+                    else
+                    {
+                        buffer[i] = GetCell(index).color;
+                    }
                 }
             }
             renderRect.Width = 0;
