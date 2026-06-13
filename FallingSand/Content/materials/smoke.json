@@ -1,0 +1,14 @@
+[
+	{
+		"internalName": "smoke",
+		"cellType": "gas",
+		"color": "ff4d4d4d",
+		"density": 1,
+		
+		"liquid_isSand": true,
+		"liquid_maxSpeed": 5,
+		"liquid_gravity": 1,
+		"liquid_inertialResistance": -1,
+		"liquid_friction": 0.0,
+		}
+]

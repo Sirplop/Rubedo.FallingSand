@@ -1,0 +1,21 @@
+[
+	{
+		"internalName": "dirt",
+		"cellType": "liquid",
+		"color": "ff513308",
+		"density": 10,
+		
+		"liquid_isSand": true,
+		"liquid_maxSpeed": 5,
+		"liquid_gravity": 1,
+		"liquid_inertialResistance": 50,
+		"liquid_friction": 0.4,
+	},
+	{
+		"parent": "dirt",
+		"internalName": "coal",
+		"tags": "[sand_other], [corrodible], [burnable], [alchemy]",
+		"color": "ff231f1a",
+		"density": 30,
+	}
+]

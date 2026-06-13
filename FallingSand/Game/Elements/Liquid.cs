@@ -10,13 +10,18 @@ public class Liquid : Element
     public Liquid(string name)
     {
         this.elementType = Type.LIQUID;
-        this.name = name;
+        this.internalName = name;
     }
 
     public override void Step(WorldChunk caller, Cell cell)
     {
         if (liquid_isStatic)
             return;
+
+        if (cell.freeFalling)
+        {
+            cell.xVel *= 0.8f;
+        }
 
         if (liquid_isSand)
         {
@@ -31,7 +36,7 @@ public class Liquid : Element
             {
                 if (CellBehaviour.TryFall(caller, cell))
                     return;
-                else if (cell.freeFalling && CellBehaviour.TryDiagonalDown(caller, cell))
+                else if (CellBehaviour.TryDiagonalDown(caller, cell))
                     return;
             }
         }

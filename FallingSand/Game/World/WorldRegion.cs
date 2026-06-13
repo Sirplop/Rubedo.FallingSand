@@ -117,7 +117,7 @@ public class WorldRegion
             null,
             Color.White,
             0,
-            Vector2.UnitY,
+            Vector2.Zero,
             Vector2.One,
             SpriteEffects.FlipVertically, layer);
     }

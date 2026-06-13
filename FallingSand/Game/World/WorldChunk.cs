@@ -2,14 +2,10 @@
 
 using FallingSand.Game.Elements;
 using Microsoft.Xna.Framework;
-using NLog.Targets;
-using Rubedo;
 using Rubedo.Graphics;
 using Rubedo.Lib;
 using Rubedo.Lib.Extensions;
-using System;
 using System.Collections;
-using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 
 namespace FallingSand.Game.World;
@@ -22,9 +18,12 @@ public class WorldChunk
     private Squirrel3 chunkRNG;
     public ref Squirrel3 ChunkRNG => ref chunkRNG;
 
-    private readonly BitArray arrivedThisFrame;
-    private readonly Color[] arrivedCellColors; //we use this to "cheat" the update order issue. More at the end of the file.
     private readonly BitArray movedWithFrame;
+    //TODO: Implement switching between two bitarrays to make resets faster.
+    /*private readonly BitArray movedWithFrame2;
+    private BitArray movedWithFrameActual;
+    private bool mwfFlip = false;*/
+
     private readonly Cell[] elements;
     private readonly RectF cameraIntersection;
 
@@ -64,8 +63,6 @@ public class WorldChunk
         elements = new Cell[size * size];
         shuffledX = new int[size * size];
         movedWithFrame = new BitArray(size * size, false);
-        arrivedThisFrame = new BitArray(size * size, false);
-        arrivedCellColors = new Color[size * size];
         int len = size * size;
         for (int i = 0; i < len; i++)
         {
@@ -73,7 +70,6 @@ public class WorldChunk
             int x = (i % size) + this.chunkX;
             elements[i] = new Cell(x, y);
             shuffledX[i] = i;
-            arrivedCellColors[i] = Color.Transparent;
         }
         renderRect = new Rectangle(chunkX, chunkY, size, size);
         dirtyRectStep = new BitArray(size * size, false);
@@ -95,8 +91,15 @@ public class WorldChunk
         }
     }
     #region Multithreaded
+#if !USE_SHUFFLE_X
+    bool flip = true;
+#endif
     public void MultithreadSetup(SandWorld matrix)
     {
+
+#if !USE_SHUFFLE_X
+        flip = !flip;
+#endif
         ResetUpdateParts();
         for (int y = -1; y <= 1; y++)
         {
@@ -119,10 +122,7 @@ public class WorldChunk
             }
         }
     }
-#if !USE_SHUFFLE_X
-    bool flip = false;
-#endif
-    public void MultithreadStep(SandWorld matrix)
+    public void MultithreadStep(SandWorld matrix, int step)
     {
         int dirtyX = Rubedo.Lib.Math.Clamp(dirtyRect.X, chunkX, chunkX + size);
         int finX = Rubedo.Lib.Math.Clamp(dirtyRect.Right, chunkX, chunkX + size);
@@ -130,20 +130,23 @@ public class WorldChunk
         int finY = Rubedo.Lib.Math.Clamp(dirtyRect.Bottom, chunkY, chunkY + size);
 
 #if USE_SHUFFLE_X
-        ShuffleXIndices(dirtyX, finX, dirtyY, finY);
+        if (step == 1) //only need to shuffle once per update cycle.
+        {
+            ShuffleXIndices(dirtyX, finX, dirtyY, finY);
+        }
         for (int y = dirtyY; y < finY; y++)
         {
             for (int x = dirtyX; x < finX; x++)
             {
                 int i = shuffledX[GetIndex(x, y)];
-                if ((!movedWithFrame[i] || arrivedThisFrame[i]) && !elements[i].IsEmpty)
+                if (!movedWithFrame[i] && !elements[i].IsEmpty)
                 {
-                    elements[i].element.Step(this, elements[i]);
+                    Cell cell = elements[i];
+                    cell.element.Step(this, elements[i]);
                 }
             }
         }
 #else
-        flip = !flip;
         for (int y = dirtyY; y < finY; y++)
         {
             if (flip)
@@ -199,8 +202,8 @@ public class WorldChunk
 
             minX = minX - PADDING < chunkX ? chunkX : minX - PADDING;
             minY = minY - PADDING < chunkY ? chunkY : minY - PADDING;
-            maxX = maxX + PADDING < chunkX ? chunkX : maxX + PADDING;
-            maxY = maxY + PADDING < chunkY ? chunkY : maxY + PADDING;
+            maxX = maxX + PADDING > chunkX + size ? chunkX + size : maxX + PADDING;
+            maxY = maxY + PADDING > chunkY + size ? chunkY + size : maxY + PADDING;
 
             dirtyRect.X = minX;
             dirtyRect.Y = minY;
@@ -233,10 +236,15 @@ public class WorldChunk
 
         prevDirtyRect = dirtyRect;
     }
-
     public void ThreadEnvelop(int x, int y)
     {
-        dirtyRectStep[GetIndex(x, y)] = true;
+        int i = GetIndex(x, y);
+        if (i < 0)
+        {
+            WorldChunk chunk = GetMultiChunk(x, y);
+            i = GetIndex(x, y);
+        }
+        dirtyRectStep[i] = true;
     }
 
     public void SetCell(Cell cell, int x, int y)
@@ -246,7 +254,8 @@ public class WorldChunk
         WorldChunk chunk = GetMultiChunk(x, y);
         cell.x = x;
         cell.y = y;
-        chunk.SetCell(cell, chunk.GetIndex(x, y), chunk != this);
+
+        chunk.SetCell(cell, chunk.GetIndex(x, y));
         chunk.ThreadEnvelop(x, y);
 
         if (x - PADDING < chunk.chunkX)
@@ -258,7 +267,7 @@ public class WorldChunk
             else
                 chunk.multithreadChunkRef[3]?.ThreadEnvelop(x - PADDING, y);
         }
-        else if (x + PADDING > chunk.chunkX + chunk.size)
+        else if (x + PADDING >= chunk.chunkX + chunk.size)
         {
             if (y - PADDING < chunk.chunkY)
                 chunk.multithreadChunkRef[2]?.ThreadEnvelop(x + PADDING, y - PADDING);
@@ -336,108 +345,23 @@ public class WorldChunk
     }
 
 #endregion
-    #region Single Threaded
-    public void Step(SandWorld matrix)
-    {
-        Rectangle.Union(ref dirtyRect, ref prevDirtyRect, out Rectangle rect);
-        if (renderRect.IsEmpty)
-            renderRect = rect;
-        else
-            Rectangle.Union(ref renderRect, ref rect, out renderRect);
-
-        prevDirtyRect = dirtyRect;
-        dirtyRect.Width = 0;
-        dirtyRect.Height = 0;
-
-        int dirtyX = Rubedo.Lib.Math.Clamp(rect.X, chunkX, chunkX + size);
-        int finX = Rubedo.Lib.Math.Clamp(rect.Right, chunkX, chunkX + size);
-        int dirtyY = Rubedo.Lib.Math.Clamp(rect.Y, chunkY, chunkY + size);
-        int finY = Rubedo.Lib.Math.Clamp(rect.Bottom, chunkY, chunkY + size);
-        if (dirtyY == finY && dirtyX == finX)
-            return; //nothing to do.
-
-        ShuffleXIndices(dirtyX, finX, dirtyY, finY);
-        for (int y = dirtyY; y < finY; y++)
-        {
-            for (int x = dirtyX; x < finX; x++)
-            {
-                int i = shuffledX[GetIndex(x, y)];
-                if (!movedWithFrame[i] && !elements[i].IsEmpty)
-                {
-                    elements[i].element.Step(this, elements[i]);
-                }
-            }
-        }
-    }
-    public void Envelop(int x, int y)
-    {
-        const int PADDING = 3;
-
-        if (dirtyRect.Width == 0 && dirtyRect.Height == 0)
-        {
-            dirtyRect.X = Rubedo.Lib.Math.Clamp(x - PADDING, chunkX, chunkX + size);
-            dirtyRect.Y = Rubedo.Lib.Math.Clamp(y - PADDING, chunkY, chunkY + size);
-            dirtyRect.Width = PADDING * 2 + (PADDING % 2);
-            dirtyRect.Height = PADDING * 2 + (PADDING % 2);
-        }
-        else
-        {
-            dirtyRect.Union(x - PADDING, y - PADDING);
-            dirtyRect.Union(x + PADDING, y + PADDING);
-        }
-    }
-    /*
-    public void SetCell(SandWorld matrix, Cell cell, int x, int y)
-    {
-        SetCell(cell, GetIndex(x, y));
-        cell.x = x;
-        cell.y = y;
-
-        if (!InBounds(x + 2, y + 2))
-        {
-            matrix.GetChunk(x + 2, y + 2)?.Envelop(x + 2, y + 2);
-        }
-        if (!InBounds(x - 2, y + 2))
-        {
-            matrix.GetChunk(x - 2, y + 2)?.Envelop(x - 2, y + 2);
-        }
-        if (!InBounds(x - 2, y - 2))
-        {
-            matrix.GetChunk(x - 2, y - 2)?.Envelop(x - 2, y - 2);
-        }
-        if (!InBounds(x + 2, y - 2))
-        {
-            matrix.GetChunk(x + 2, y - 2)?.Envelop(x + 2, y - 2);
-        }
-
-        Envelop(x, y);
-    }*/
-
-    public void SetCell(Cell cell, int index, bool moveFlag)
+    public void SetCell(Cell cell, int index)
     {
         elements[index] = cell;
-        if (moveFlag)
-        {
-            arrivedThisFrame[index] = true;
-            arrivedCellColors[index] = cell.color;
-        }
         movedWithFrame[index] = true;
     }
-
-    #endregion
 
     public void ResetUpdateParts()
     {
         for (int i = 0; i < movedWithFrame.Length; i++)
         {
-            movedWithFrame[i] = false; //these are the same length.
-            arrivedThisFrame[i] = false;
+            movedWithFrame[i] = false;
         }
     }
 
-    public bool MovedWithFrame(int x, int y)
+    public bool MovedWithFrame(int index)
     {
-        return movedWithFrame[GetIndex(x, y)];
+        return movedWithFrame[index];
     }
 
     public Cell GetCell(int x, int y)
@@ -485,14 +409,14 @@ public class WorldChunk
                 for (int x = dirtyX; x < finX; x++)
                 {
                     int i = region.GetDrawIndex(x, y);
-                    int index = GetIndex(x, y);
-                    if (arrivedThisFrame[index])
+                    Cell cell = GetCell(x, y);
+                    /*if (!MovedWithFrame(GetIndex(x, y)) && !cell.IsEmpty)
                     {
-                        buffer[i] = arrivedCellColors[index];
+                        buffer[i] = Color.Red;
                     }
-                    else
+                    else*/
                     {
-                        buffer[i] = GetCell(index).color;
+                        buffer[i] = cell.color;
                     }
                 }
             }
@@ -503,15 +427,3 @@ public class WorldChunk
         return false;
     }
 }
-
-/*
-    The standard 2x2, 4-phase update cycle has a single flaw that causes considerable artifacting: If a cell moves from one chunk
-    up or down into another, they have the potential of getting "stuck" there for a frame, in that they move down, don't get moved
-    during the chunk they've moved into's phase, then are still there the following frame, which causes the cells above them in the
-    previous chunk to pile up. The game Noita has this issue, though they do what they can by making things fall real fast.
-
-    We cheat this by making cells that move into new chunks double-update, and leave behind a fake cell color that will show up if
-    no other cell takes that place this frame. Double updating would cause a line at chunk borders, so we just paint over it. Lmao.
-    It does mean that there are now fake cells being formed, but only as things move and only for individual frames at a time. It should be
-    pretty hard for a player to notice unless they are looking for it.
- */

@@ -6,6 +6,7 @@ using Rubedo;
 using Rubedo.Components;
 using Rubedo.Graphics;
 using Rubedo.Lib;
+using Rubedo.Lib.Extensions;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -20,7 +21,7 @@ namespace FallingSand.Game.World;
 public class SandWorld : RenderableComponent
 {
     private float accumulatedDelta = 0;
-    public const float SAND_UPDATE_TIME = 1f / 50;
+    public const float SAND_UPDATE_TIME = 1f / 60;
     public bool doTick = true;
     public bool stepTick = true;
     public override RectF Bounds => WorldRect;
@@ -38,6 +39,7 @@ public class SandWorld : RenderableComponent
 
     public readonly Dictionary<int, Dictionary<int, WorldRegion>> regionLookup;
     public readonly List<WorldRegion> regions;
+    private Squirrel3 rnd = new Squirrel3();
 
     public SandWorld(int chunkSize, int chunksPerRegion)
     {
@@ -109,6 +111,7 @@ public class SandWorld : RenderableComponent
 
     private List<List<WorldChunk>> _updateGrid = new List<List<WorldChunk>>();
     private List<WorldChunk> _phaseGrid;
+    private int _currentStep = 1;
     bool flip = false;
     public void MultiStep()
     {
@@ -119,6 +122,7 @@ public class SandWorld : RenderableComponent
         }
 
         const int GRIDSIZE = 2;
+        const int PASSES = 2;
 
         _updateGrid.Clear();
         for (int i = 0; i < GRIDSIZE * GRIDSIZE; i++)
@@ -143,24 +147,23 @@ public class SandWorld : RenderableComponent
             }
         }
 
-        /*if (flip)
-        {
-            (_updateGrid[0], _updateGrid[2]) = (_updateGrid[2], _updateGrid[0]);
-            (_updateGrid[1], _updateGrid[3]) = (_updateGrid[3], _updateGrid[1]);
-        }
-        flip = !flip;*/
+        _updateGrid.FYShuffle(ref rnd);
 
-        for (int i = 0; i < _updateGrid.Count; i++)
+        for (int z = 1; z <= PASSES; z++)
         {
-            _phaseGrid = _updateGrid[i];
-            if (_phaseGrid.Count == 0)
-                continue;
+            _currentStep = z;
+            for (int i = 0; i < _updateGrid.Count; i++)
+            {
+                _phaseGrid = _updateGrid[i];
+                if (_phaseGrid.Count == 0)
+                    continue;
 #if USE_MULTITHREADING
-            Parallel.For(0, _phaseGrid.Count, RunChunkUpdate);
+                Parallel.For(0, _phaseGrid.Count, RunChunkUpdate);
 #else
             for (int j = 0; j < _phaseGrid.Count; j++)
                 RunChunkUpdate(j);
 #endif
+            }
         }
 
         for (int i = 0; i < regions.Count; i++)
@@ -172,75 +175,7 @@ public class SandWorld : RenderableComponent
 
     private void RunChunkUpdate(int i)
     {
-        _phaseGrid[i].MultithreadStep(this);
-    }
-
-    void UpdateWorldWithGravityWavefront()
-    {
-        for (int i = 0; i < regions.Count; i++)
-        {
-            if (regions[i].active)
-                regions[i].MultithreadSetup(this);
-        }
-
-        // Group active chunks by their chunk-row (based on Y)
-        Dictionary<int, (List<WorldChunk>, List<WorldChunk>)> rows = new Dictionary<int, (List<WorldChunk>, List<WorldChunk>)>();
-        for (int r = 0; r < regions.Count; r++)
-        {
-            WorldRegion region = regions[r];
-            if (!region.active)
-                continue;
-            for (int i = 0; i < region.chunks.Length; i++)
-            {
-                WorldChunk chunk = region.chunks[i];
-                if (chunk.DirtyRect.Width == 0 && chunk.DirtyRect.Height == 0)
-                    continue;
-                int row = chunk.chunkY >> chunk.sizeShift;
-
-                if (!rows.TryGetValue(row, out var list))
-                {
-                    list = (new List<WorldChunk>(), new List<WorldChunk>());
-                    rows.Add(row, list);
-                }
-                if (System.Math.Abs(chunk.chunkX >> chunk.sizeShift) % 2 == 1)
-                    list.Item1.Add(chunk);
-                else
-                    list.Item2.Add(chunk);
-            }
-        }
-
-        // Get rows sorted top -> bottom
-        List<int> orderedRows = rows.Keys.OrderBy(r => r).ToList();
-
-        // GRAVITY WAVEFRONT:
-        // update chunk rows from top -> bottom,
-        // chunks within a row run in parallel
-        foreach (int row in orderedRows)
-        {
-            (List<WorldChunk> leftChunks, List<WorldChunk> rightChunks) = rows[row];
-            if (leftChunks.Count == 0 && rightChunks.Count == 0)
-                continue;
-
-#if USE_MULTITHREADING
-            Parallel.For(0, leftChunks.Count, i =>
-            {
-                leftChunks[i].MultithreadStep(this);
-            });
-            Parallel.For(0, rightChunks.Count, i =>
-            {
-                rightChunks[i].MultithreadStep(this);
-            });
-#else
-            foreach (var chunk in rowChunks)
-                chunk.MultithreadStep(this);
-#endif
-        }
-
-        for (int i = 0; i < regions.Count; i++)
-        {
-            if (regions[i].active)
-                regions[i].MultithreadFinish(this);
-        }
+        _phaseGrid[i].MultithreadStep(this, _currentStep);
     }
 
     public void GetRegionLocation(int x, int y, out int regX, out int regY)
@@ -288,7 +223,7 @@ public class SandWorld : RenderableComponent
 
     public bool InBounds(int x, int y)
     {
-        return x >= worldMinX && x < worldMaxX && y >= worldMinY && y < worldMaxY;
+        return x >= worldMinX && x <= worldMaxX && y >= worldMinY && y <= worldMaxY;
     }
 
 

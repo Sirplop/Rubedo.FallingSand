@@ -16,19 +16,18 @@ public abstract class Element
         GAS
     }
 
+    public string[] tags;
     public Type elementType;
-    public string name; //internal name
-    public string uiName; //translation key name
+    public string internalName; //internal name
     public Color color;
-    public float density;
-
+    public float density = 5;
 
     public bool liquid_isStatic = false; //does this particle move
     public bool liquid_isSand = false; //is this particle a powder, aka only moves downwards?
 
     public int liquid_maxSpeed = 5; //how fast can a single pixel go?
     public float liquid_gravity = 1f; //vertical acceleration rate
-    public int liquid_dispersion = 1; //how far the particle looks left and right to move to the side
+    public int liquid_dispersion = 5; //how far the particle looks left and right to move to the side
     public int liquid_inertialResistance = 50; //[0, 100] how likely is this element to become freefalling when something passes by?
     public float liquid_friction = 0.4f; //how fast does this element slow down?
 

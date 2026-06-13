@@ -1,0 +1,14 @@
+[
+	{
+		"internalName": "sand",
+		"cellType": "liquid",
+		"color": "ffd5b971",
+		"density": 5,
+		
+		"liquid_isSand": true,
+		"liquid_maxSpeed": 5,
+		"liquid_gravity": 1,
+		"liquid_inertialResistance": 10,
+		"liquid_friction": 0.4,
+	}
+]

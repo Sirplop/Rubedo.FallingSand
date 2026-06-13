@@ -17,7 +17,7 @@ public class Cell
     public int y;
     public Color color;
 
-    public int xVel = 0;
+    public float xVel = 0;
     public float yVel = 0;
     public bool freeFalling = false;
     public byte freeWiggle = 1;
@@ -38,31 +38,18 @@ public class Cell
         freeFallingCount = 0;
     }
 
+
     public void SwapPositions(WorldChunk caller, Cell toSwap)
     {
-        SwapPositions(caller, toSwap, toSwap.x, toSwap.y);
-    }
-    public void SwapPositions(WorldChunk caller, int x, int y)
-    {
-        if (this.x == x && this.y == y)
+        int toSwapX = toSwap.x;
+        int toSwapY = toSwap.y;
+        int cellX = this.x;
+        int cellY = this.y;
+
+        if (cellX == toSwapX && cellY == toSwapY)
             return;
 
-        if (!caller.TryGetCell(x, y, out Cell cell))
-            return; //failed to swap
-        caller.SetCell(cell, this.x, this.y);
-        caller.SetCell(cell, x, y);
-
-        this.freeFalling = true;
-        caller.SetFreeFalling(caller, x + 1, y);
-        caller.SetFreeFalling(caller, x - 1, y);
-    }
-
-    private void SwapPositions(WorldChunk caller, Cell toSwap, int toSwapX, int toSwapY)
-    {
-        if (this.x == toSwapX && this.y == toSwapY)
-            return;
-
-        caller.SetCell(toSwap, this.x, this.y);
+        caller.SetCell(toSwap, cellX, cellY);
         caller.SetCell(this, toSwapX, toSwapY);
 
         this.freeFalling = true;
@@ -70,46 +57,57 @@ public class Cell
         caller.SetFreeFalling(caller, toSwapX - 1, toSwapY);
     }
 
-    public void Displace(WorldChunk caller, Cell toSwap)
+    public void Displace(WorldChunk caller, Cell target)
     {
-        Displace(caller, toSwap, toSwap.x, toSwap.y);
-    }
-    private void Displace(WorldChunk caller, Cell target, int targetX, int targetY)
-    {
-        if (this.x == targetX && this.y == targetY)
+        int targetX = target.x;
+        int targetY = target.y;
+        int cellX = this.x;
+        int cellY = this.y;
+
+        if (cellX == targetX && cellY == targetY)
         {
             return;
         }
-        Displace(caller, target, this);
-        SwapPositions(caller, target);
+        Cell displaced = Displace(caller, target, this);
+        if (displaced != null)
+        {
+            SwapPositions(caller, displaced);
+        }
+        else
+        {
+            SwapPositions(caller, target); //target didn't move, swap spots directly.
+        }
     }
 
-    private static bool Displace(WorldChunk caller, Cell cell, Cell source)
+    private static Cell Displace(WorldChunk caller, Cell cell, Cell source)
     {
-        bool upFree = caller.TryGetCell(cell.x, cell.y + 1, out Cell up) && up != source && up.IsEmpty;
-        bool upLeftFree = caller.TryGetCell(cell.x - 1, cell.y + 1, out Cell upLeft) && upLeft != source && upLeft.IsEmpty;
-        bool upRightFree = caller.TryGetCell(cell.x + 1, cell.y + 1, out Cell upRight) && upRight != source && upRight.IsEmpty;
+        int cellX = cell.x;
+        int cellY = cell.y;
+
+        bool upFree = caller.TryGetCell(cellX, cellY + 1, out Cell up) && up != source && up.IsEmpty;
+        bool upLeftFree = caller.TryGetCell(cellX - 1, cellY + 1, out Cell upLeft) && upLeft != source && upLeft.IsEmpty;
+        bool upRightFree = caller.TryGetCell(cellX + 1, cellY + 1, out Cell upRight) && upRight != source && upRight.IsEmpty;
 
         int flip = Rubedo.Lib.Random.Range(0, 3);
+        Cell displaced = null;
         switch (flip)
         {
             case 0:
-                if (upFree) cell.SwapPositions(caller, up);
-                else if (upLeftFree) cell.SwapPositions(caller, upLeft);
-                else if (upRightFree) cell.SwapPositions(caller, upRight);
+                if (upFree) { cell.SwapPositions(caller, up); displaced = up; }
+                else if (upLeftFree) { cell.SwapPositions(caller, upLeft); displaced = upLeft; }
+                else if (upRightFree) { cell.SwapPositions(caller, upRight); displaced = upRight; }
                 break;
             case 1:
-                if (upLeftFree) cell.SwapPositions(caller, upLeft);
-                else if (upRightFree) cell.SwapPositions(caller, upRight);
-                else if (upFree) cell.SwapPositions(caller, up);
+                if (upLeftFree) { cell.SwapPositions(caller, upLeft); displaced = upLeft; }
+                else if (upRightFree) { cell.SwapPositions(caller, upRight); displaced = upRight; }
+                else if (upFree) { cell.SwapPositions(caller, up); displaced = up; }
                 break;
             case 2:
-                if (upRightFree) cell.SwapPositions(caller, upRight);
-                else if (upFree) cell.SwapPositions(caller, up);
-                else if (upLeftFree) cell.SwapPositions(caller, upLeft);
+                if (upRightFree) { cell.SwapPositions(caller, upRight); displaced = upRight; }
+                else if (upFree) { cell.SwapPositions(caller, up); displaced = up; }
+                else if (upLeftFree) { cell.SwapPositions(caller, upLeft); displaced = upLeft; }
                 break;
         }
-        return upFree || upLeftFree || upRightFree;
+        return displaced;
     }
-
 }

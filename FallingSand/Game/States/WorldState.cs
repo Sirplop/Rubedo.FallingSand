@@ -16,6 +16,9 @@ using System;
 using Rubedo.UI.Text;
 using System.Collections.Generic;
 using Microsoft.Xna.Framework.Graphics;
+using Rubedo.Resources;
+using FallingSand.Game.UI;
+using Rubedo.Lib.Extensions;
 
 namespace FallingSand.Game.States;
 
@@ -26,7 +29,7 @@ public class WorldState : GameState
 {
     public SandWorld world;
 
-    private readonly AllCondition leftClickCondition = new AllCondition(new MouseCondition(InputManager.MouseButtons.Left), new NotCondition(new KeyCondition(Keys.LeftShift, true)));
+    public readonly AllCondition leftClickCondition = new AllCondition(new MouseCondition(InputManager.MouseButtons.Left), new NotCondition(new KeyCondition(Keys.LeftShift, true)));
     private readonly AllCondition shiftLeftClickCondition = new AllCondition(new MouseCondition(InputManager.MouseButtons.Left), new KeyCondition(Keys.LeftShift, true));
     private readonly MouseCondition rightClickCondition = new MouseCondition(InputManager.MouseButtons.Right);
     private readonly MouseCondition middleClickCondition = new MouseCondition(InputManager.MouseButtons.Middle);
@@ -43,22 +46,21 @@ public class WorldState : GameState
     private readonly KeyCondition stepSim = new KeyCondition(Keys.O);
     private readonly KeyCondition toggleCells = new KeyCondition(Keys.C);
     private readonly KeyCondition toggleRects = new KeyCondition(Keys.V);
+    private readonly KeyCondition togglePosition = new KeyCondition(Keys.B);
 
     private Shapes shapes;
-    private Liquid sand;
-    private Liquid water;
-    private Liquid dirt;
-    private Liquid stone;
-    private Gas smoke;
 
-    private List<(Element, int)> spawnables;
-    private int spawnIndex = 0;
+    public ElementManager elementManager;
+
+    public Element selectedElement;
 
     public Vertical debugRoot;
+    public Vertical mouseVertical;
     public List<DebugTextEntry> debugText = new List<DebugTextEntry>();
     private double deltaTime = 0.0f;
     private bool drawCells = false;
     private bool drawRects = false;
+    private bool drawPosition = false;
 
     public WorldState(StateManager sm) : base(sm)
     {
@@ -68,8 +70,11 @@ public class WorldState : GameState
 
     public override void LoadContent()
     {
+        elementManager = new ElementManager();
+        elementManager.LoadElements("materials");
+
         Time.SetFixedDeltaTime(1f / 50f);
-        Assets.CreateNewFontSystem("fs-default", "fonts/DroidSans.ttf", "fonts/DroidSansJapanese.ttf", "fonts/Symbola-Emoji.ttf");
+        Assets.CreateNewFontSystem("fs-default", "DroidSans.ttf", "DroidSansJapanese.ttf", "Symbola-Emoji.ttf");
         base.LoadContent();
     }
 
@@ -90,53 +95,32 @@ public class WorldState : GameState
         debugRoot.Offset = new Vector2(30, 0);
         GUI.Root.AddChild(debugRoot);
 
-        sand = new Liquid("Sand");
-        sand.density = 5;
-        sand.color = new Color(213f / 255f, 185f / 255f, 113f / 255f);
-        sand.liquid_isSand = true;
-        sand.liquid_inertialResistance = 10;
-        dirt = new Liquid("Dirt");
-        dirt.color = new Color(0.318f, 0.2f, 0.03f);
-        dirt.density = 10;
-        dirt.liquid_isSand = true;
-        dirt.liquid_inertialResistance = 50;
-        dirt.liquid_gravity = 2;
-        water = new Liquid("Water");
-        water.density = 1;
-        water.color = new Color(20f / 255f, 100f / 255f, 171f / 255f);
-        water.liquid_dispersion = 5;
-        water.liquid_gravity = 3;
-        water.liquid_inertialResistance = -1;
-        stone = new Liquid("Stone");
-        stone.density = 50;
-        stone.color = new Color(0.4f, 0.4f, 0.4f);
-        stone.liquid_isStatic = true;
-        smoke = new Gas("Smoke");
-        smoke.density = 1;
-        smoke.color = new Color(0.3f, 0.3f, 0.3f);
-
-        spawnables = new List<(Element, int)>();
-        spawnables.Add((sand, 100));
-        spawnables.Add((dirt, 35));
-        spawnables.Add((water, 35));
-        spawnables.Add((stone, 100));
-        spawnables.Add((smoke, 35));
-
         world = new SandWorld(64, 8);
         Add(new Entity() { world });
 
+        ElementSideBar bar = new ElementSideBar(elementManager, this);
+
         AddDebugLabel(debugRoot, () => string.Format("{0:0.0} ms ({1:0.} fps)", deltaTime * 1000.0f, 1.0f / deltaTime));
-        AddDebugLabel(debugRoot, () => $"Selected Material: {spawnables[spawnIndex].Item1.name}");
+        AddDebugLabel(debugRoot, () => $"Selected Material: {selectedElement.internalName}");
+        CreateMouseDebugGUI();
     }
 
     public void AddDebugLabel(Vertical vert, Func<string> valueFunc)
     {
-        FontSystem font = Assets.GetFontSystem("fs-default");
+        FontSystem font = Assets.GetFont("fs-default");
         Label label = new Label(font, string.Empty, Color.Green, 18);
         label.TightLineHeight = true;
         DebugTextEntry entry = new DebugTextEntry(label, valueFunc);
         debugText.Add(entry);
         vert.AddChild(label);
+    }
+    public void CreateMouseDebugGUI()
+    {
+        mouseVertical = new Vertical();
+        FontSystem font = Assets.GetFont("fs-default");
+        Label world = new Label(font, string.Empty, Color.AntiqueWhite, 18);
+        mouseVertical.AddChild(world);
+        GUI.Root.AddChild(mouseVertical);
     }
 
     public override void Update()
@@ -160,7 +144,7 @@ public class WorldState : GameState
             {
                 foreach (WorldChunk chunk in region.chunks)
                 {
-                    shapes.DrawBox(chunk.chunkX, chunk.chunkY, chunk.size, chunk.size, Color.DarkGray, 1f);
+                    shapes.DrawBox(chunk.chunkX, chunk.chunkY, chunk.size, chunk.size, Color.DarkGray, 0.5f);
                 }
             }
         }
@@ -176,6 +160,17 @@ public class WorldState : GameState
             }
         }
         shapes.End();
+
+        if (drawPosition && mouseVertical != null && !mouseVertical.IsDestroyed)
+        {
+            Vector2 mouse = InputManager.MouseWorldPosition(MainCamera);
+            Vector2 mouseScreen = InputManager.MouseScreenPosition(MainCamera);
+            mouse = new Vector2(MathF.Ceiling(mouse.X), MathF.Ceiling(mouse.Y));
+            mouseVertical.Offset = GUI.Root.ScreenToUI(mouseScreen + new Vector2(15, 0));
+
+            Label world = mouseVertical.Children[0] as Label;
+            world.Text = mouse.ToNiceString("0");
+        }
     }
 
     private int brushSize = 3;
@@ -187,12 +182,7 @@ public class WorldState : GameState
             brushSize = Rubedo.Lib.Math.Clamp(brushSize + scroll, 0, 16);
         }
 
-        if (rightClickCondition.Pressed())
-        {
-            spawnIndex = spawnIndex == spawnables.Count - 1 ? 0 : spawnIndex + 1;
-        }
-        (Element type, int chance) = spawnables[spawnIndex];
-        SpawnCell(leftClickCondition.Pressed(), leftClickCondition.Held(), type, chance);
+        SpawnCell(leftClickCondition.Pressed(), leftClickCondition.Held(), selectedElement, selectedElement.liquid_isStatic ? 100 : 35);
         SpawnCell(shiftLeftClickCondition.Pressed(), shiftLeftClickCondition.Held(), null, 101);
 
         if (middleClickCondition.Pressed())
@@ -200,7 +190,7 @@ public class WorldState : GameState
             Point mouse = InputManager.MouseWorldPosition().ToPoint();
             Entity entity = new Entity(mouse.ToVector2())
             {
-                new Spout(world, spawnables[spawnIndex].Item1, brushSize)
+                new Spout(world, selectedElement, brushSize)
             };
             Add(entity);
         }
@@ -243,6 +233,11 @@ public class WorldState : GameState
         if (toggleRects.Pressed())
         {
             drawRects = !drawRects;
+        }
+        if (togglePosition.Pressed())
+        {
+            drawPosition = !drawPosition;
+            mouseVertical.SetVisible(drawPosition);
         }
     }
 

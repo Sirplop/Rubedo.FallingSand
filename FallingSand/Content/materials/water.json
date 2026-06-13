@@ -1,0 +1,20 @@
+[
+	{
+		"internalName": "water",
+		"cellType": "liquid",
+		"color": "ff1464ab",
+		"density": 1,
+		
+		"liquid_maxSpeed": 5,
+		"liquid_gravity": 3,
+		"liquid_dispersion": 5,
+		"liquid_inertialResistance": -1,
+		"liquid_friction": 0.0,
+	},
+	{
+		"parent": "water",
+		"internalName": "blood",
+		"color": "ffa52201",
+		"density": 1.2,
+	}
+]
