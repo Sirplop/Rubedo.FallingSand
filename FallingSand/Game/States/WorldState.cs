@@ -47,10 +47,9 @@ public class WorldState : GameState
     private readonly KeyCondition toggleCells = new KeyCondition(Keys.C);
     private readonly KeyCondition toggleRects = new KeyCondition(Keys.V);
     private readonly KeyCondition togglePosition = new KeyCondition(Keys.B);
+    private readonly KeyCondition toggleCellDetails = new KeyCondition(Keys.N);
 
     private Shapes shapes;
-
-    public ElementManager elementManager;
 
     public Element selectedElement;
 
@@ -61,6 +60,7 @@ public class WorldState : GameState
     private bool drawCells = false;
     private bool drawRects = false;
     private bool drawPosition = false;
+    private bool drawCellDetails = false;
 
     public WorldState(StateManager sm) : base(sm)
     {
@@ -70,8 +70,8 @@ public class WorldState : GameState
 
     public override void LoadContent()
     {
-        elementManager = new ElementManager();
-        elementManager.LoadElements("materials");
+        ElementManager.Initialize();
+        ElementManager.LoadElements("materials");
 
         Time.SetFixedDeltaTime(1f / 50f);
         Assets.CreateNewFontSystem("fs-default", "DroidSans.ttf", "DroidSansJapanese.ttf", "Symbola-Emoji.ttf");
@@ -98,7 +98,7 @@ public class WorldState : GameState
         world = new SandWorld(64, 8);
         Add(new Entity() { world });
 
-        ElementSideBar bar = new ElementSideBar(elementManager, this);
+        ElementSideBar bar = new ElementSideBar(this);
 
         AddDebugLabel(debugRoot, () => string.Format("{0:0.0} ms ({1:0.} fps)", deltaTime * 1000.0f, 1.0f / deltaTime));
         AddDebugLabel(debugRoot, () => $"Selected Material: {selectedElement.internalName}");
@@ -164,12 +164,29 @@ public class WorldState : GameState
         if (drawPosition && mouseVertical != null && !mouseVertical.IsDestroyed)
         {
             Vector2 mouse = InputManager.MouseWorldPosition(MainCamera);
+            int x = Rubedo.Lib.Math.FloorToInt(mouse.X);
+            int y = Rubedo.Lib.Math.FloorToInt(mouse.Y);
+            Cell cell = this.world.GetCell(x, y);
+            string material = "???";
+            if (cell != null)
+            {
+                if (cell.IsEmpty)
+                    material = "air";
+                else
+                    material = cell.element.internalName;
+            }
+
             Vector2 mouseScreen = InputManager.MouseScreenPosition(MainCamera);
             mouse = new Vector2(MathF.Ceiling(mouse.X), MathF.Ceiling(mouse.Y));
             mouseVertical.Offset = GUI.Root.ScreenToUI(mouseScreen + new Vector2(15, 0));
 
             Label world = mouseVertical.Children[0] as Label;
-            world.Text = mouse.ToNiceString("0");
+            world.Text = material + " - "+mouse.ToNiceString("0");
+
+            if (drawCellDetails && cell != null && !cell.IsEmpty)
+            {
+                world.Text += $"\nVelocity: {cell.xVel}, {cell.yVel}\nFreefalling: {cell.freeFalling}, {cell.freeFallingCount}\nLast Frame: {cell.lastFrame}";
+            }
         }
     }
 
@@ -238,6 +255,10 @@ public class WorldState : GameState
         {
             drawPosition = !drawPosition;
             mouseVertical.SetVisible(drawPosition);
+        }
+        if (toggleCellDetails.Pressed())
+        {
+            drawCellDetails = !drawCellDetails;
         }
     }
 

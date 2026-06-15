@@ -8,16 +8,16 @@ namespace FallingSand.Game.Elements;
 /// <summary>
 /// TODO: I am ElementManager, and I don't have a summary yet.
 /// </summary>
-public class ElementManager
+public static class ElementManager
 {
-    public Dictionary<ReactionKey, Reaction> reactions;
+    public static Dictionary<ReactionKey, Reaction> reactions;
 
-    public Dictionary<string, Element> elementsByName;
-    public Dictionary<Color, Element> elementsByColor;
+    public static Dictionary<string, Element> elementsByName;
+    public static Dictionary<Color, Element> elementsByColor;
 
-    public Dictionary<string, HashSet<Element>> tags;
+    public static Dictionary<string, HashSet<Element>> tags;
 
-    public ElementManager()
+    public static void Initialize()
     {
         reactions = new Dictionary<ReactionKey, Reaction>();
         elementsByName = new Dictionary<string, Element>();
@@ -25,7 +25,7 @@ public class ElementManager
         tags = new Dictionary<string, HashSet<Element>>();
     }
 
-    public void LoadElements(string folderPath)
+    public static void LoadElements(string folderPath)
     {
         string path = Path.Combine(Assets.RootDirectory, folderPath);
         DirectoryInfo baseDirectoryInfo = new DirectoryInfo(path);
@@ -69,7 +69,7 @@ public class ElementManager
         }
     }
 
-    public void AddToTag(Element element, string tag)
+    public static void AddToTag(Element element, string tag)
     {
         if (!tags.TryGetValue(tag, out HashSet<Element> tagSet))
         {

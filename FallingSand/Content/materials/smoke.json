@@ -10,5 +10,12 @@
 		"liquid_gravity": 1,
 		"liquid_inertialResistance": -1,
 		"liquid_friction": 0.0,
-		}
+	},
+	{
+		"parent": "smoke",
+		"internalName": "flammable_gas",
+		"color": "ff72a571",
+		"density": 0.5,
+		"liquid_inertialResistance": 85
+	}
 ]

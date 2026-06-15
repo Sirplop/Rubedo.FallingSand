@@ -18,16 +18,14 @@ namespace FallingSand.Game.UI;
 /// </summary>
 public class ElementSideBar
 {
-    public ElementSideBar(ElementManager manager, WorldState state)
+    public ElementSideBar(WorldState state)
     {
-        Texture2D colorTexture = new Texture2D(RubedoEngine.Graphics.GraphicsDevice, 1, 1);
-
         Vertical vertical = new Vertical();
         vertical.SetAnchorAndOffset(Anchor.TopRight, new Vector2(5, 5));
         vertical.childPadding = 5;
 
         Element element1 = null;
-        foreach (Element element in manager.elementsByName.Values)
+        foreach (Element element in ElementManager.elementsByName.Values)
         {
             if (state.selectedElement == null)
                 state.selectedElement = element;

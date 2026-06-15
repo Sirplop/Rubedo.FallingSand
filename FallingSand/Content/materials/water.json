@@ -6,7 +6,7 @@
 		"density": 1,
 		
 		"liquid_maxSpeed": 5,
-		"liquid_gravity": 3,
+		"liquid_gravity": 1,
 		"liquid_dispersion": 5,
 		"liquid_inertialResistance": -1,
 		"liquid_friction": 0.0,

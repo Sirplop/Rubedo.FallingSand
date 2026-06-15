@@ -22,6 +22,7 @@ public class Cell
     public bool freeFalling = false;
     public byte freeWiggle = 1;
     public byte freeFallingCount = 0;
+    public double lastFrame = 0;
 
     public bool IsEmpty => element == null;
 
@@ -55,6 +56,8 @@ public class Cell
         this.freeFalling = true;
         caller.SetFreeFalling(caller, toSwapX + 1, toSwapY);
         caller.SetFreeFalling(caller, toSwapX - 1, toSwapY);
+        caller.SetFreeFalling(caller, cellX + 1, cellY);
+        caller.SetFreeFalling(caller, cellX - 1, cellY);
     }
 
     public void Displace(WorldChunk caller, Cell target)

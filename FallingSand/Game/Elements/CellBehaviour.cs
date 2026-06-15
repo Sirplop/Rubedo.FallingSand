@@ -1,6 +1,5 @@
 ﻿using FallingSand.Game.World;
 using Rubedo;
-using Rubedo.Lib;
 
 namespace FallingSand.Game.Elements;
 
@@ -9,170 +8,349 @@ namespace FallingSand.Game.Elements;
 /// </summary>
 public static class CellBehaviour
 {
+    public enum ActResult
+    {
+        /// <summary>
+        /// The cell has moved, and is allowed to continue moving
+        /// </summary>
+        Move,
+        /// <summary>
+        /// The cell has moved, and can't move anymore
+        /// </summary>
+        StopMove,
+        /// <summary>
+        /// The cell hasn't moved, and should not try any more
+        /// </summary>
+        Stop,
+        /// <summary>
+        /// The cell reacted with its target, which is a stop.
+        /// </summary>
+        Reaction
+    }
+
     public static bool CanBeSwapped(Cell cell, Cell target)
     {
-        return target.IsEmpty ||
-            (target.element.density < cell.element.density && target.element.elementType == Element.Type.LIQUID && (!cell.element.liquid_isSand || !target.element.liquid_isSand)) ||
+        if (target.IsEmpty)
+            return true;
+        if (target.element.liquid_isStatic)
+            return false;
+
+        return
+            (target.element.elementType == Element.Type.LIQUID && CompareDensities(cell, target) && (!cell.element.liquid_isSand || !target.element.liquid_isSand)) ||
             (target.element.elementType == Element.Type.GAS && cell.element.elementType == Element.Type.LIQUID) ||
-            (target.element.elementType == Element.Type.GAS && cell.element.elementType == Element.Type.GAS && target.element.density > cell.element.density);
+            (target.element.elementType == Element.Type.GAS && cell.element.elementType == Element.Type.GAS && CompareGasDensities(cell, target));
     }
-    private static bool GasCanSwap(WorldChunk caller, Cell cell, Cell target)
+
+    private static bool CompareDensities(Cell cell, Cell target)
     {
-        return target.IsEmpty ||
-            (target.element.elementType == Element.Type.GAS && cell.element.elementType == Element.Type.GAS);
+        return cell.element.density > target.element.density && cell.y >= target.y;
+    }
+    private static bool CompareGasDensities(Cell cell, Cell target)
+    {
+        return cell.element.density < target.element.density && cell.y <= target.y;
+    }
+    private static void SwapForDensities(WorldChunk caller, Cell cell, Cell target)
+    {
+        cell.yVel *= 0.5f;
+        if (Rubedo.Lib.Random.Percent > 80)
+        {
+            cell.xVel *= -1;
+        }
+       SwapOrDisplace(caller, cell, target);
     }
 
     #region LIQUID
-    public static bool MoveSide(WorldChunk caller, Cell cell)
+    public static bool TryMoveLine(WorldChunk caller, Cell cell)
     {
-        if (cell.xVel > 0)
-        {
-            int right = CheckSide(caller, cell, cell.element.liquid_dispersion, 1, out Cell rightTarget);
-            if (right < cell.element.liquid_dispersion)
-                cell.xVel = -cell.xVel;
-            if (right > 0)
-            {
-                SwapOrDisplace(caller, cell, rightTarget);
-                return true;
-            }
-            return false;
-        }
-        else if (cell.xVel < 0)
-        {
-            int left = CheckSide(caller, cell, cell.element.liquid_dispersion, -1, out Cell leftTarget);
-            if (left < cell.element.liquid_dispersion)
-                cell.xVel = -cell.xVel;
-            if (left > 0)
-            {
-                SwapOrDisplace(caller, cell, leftTarget);
-                return true;
-            }
-            return false;
-        }
-        else
-        {
-            int right = CheckSide(caller, cell, cell.element.liquid_dispersion, 1, out Cell rightTarget);
-            int left = CheckSide(caller, cell, cell.element.liquid_dispersion, -1, out Cell leftTarget);
+        int matrixX1 = cell.x;
+        int matrixY1 = cell.y;
+        int matrixX2 = Rubedo.Lib.Math.CeilToInt(cell.x + cell.xVel);
+        int matrixY2 = Rubedo.Lib.Math.CeilToInt(cell.y + cell.yVel);
 
-            if (left == 0 && right == 0)
-                return false; //no movement possible.
+        if (matrixX1 == matrixX2 && matrixY1 == matrixY2)
+            return false; //same position.
 
-            bool leftFree = false;
-            bool rightFree = false;
+        int xDiff = matrixX1 - matrixX2;
+        int yDiff = matrixY1 - matrixY2;
+        bool xDiffIsLarger = System.Math.Abs(xDiff) > System.Math.Abs(yDiff);
 
-            if (left == right)
+        int xModifier = xDiff < 0 ? 1 : -1;
+        int yModifier = yDiff < 0 ? 1 : -1;
+
+        int longerSideLength = System.Math.Max(System.Math.Abs(xDiff), System.Math.Abs(yDiff));
+        int shorterSideLength = System.Math.Min(System.Math.Abs(xDiff), System.Math.Abs(yDiff));
+        float slope = (shorterSideLength == 0 || longerSideLength == 0) ? 0 : ((float)(shorterSideLength) / (longerSideLength));
+
+        int shorterSideIncrease;
+        bool ret = false;
+        for (int i = 1; i <= longerSideLength; i++)
+        {
+            shorterSideIncrease = Rubedo.Lib.Math.RoundToInt(i * slope);
+            int yIncrease, xIncrease;
+            if (xDiffIsLarger)
             {
-                leftFree = caller.ChunkRNG.Flip();
-                rightFree = !leftFree;
+                xIncrease = i;
+                yIncrease = shorterSideIncrease;
             }
             else
             {
-                leftFree = left > right;
-                rightFree = !leftFree;
+                yIncrease = i;
+                xIncrease = shorterSideIncrease;
             }
-
-            if (leftFree)
+            int currentY = matrixY1 + (yIncrease * yModifier);
+            int currentX = matrixX1 + (xIncrease * xModifier);
+            if (caller.InMultiBounds(currentX, currentY))
             {
-                cell.xVel = -1;
-                SwapOrDisplace(caller, cell, leftTarget);
+                if (caller.TryGetCell(currentX, currentY, out Cell target))
+                {
+                    ActResult actRes = ActOnCell(caller, cell, target);
+                    switch (actRes)
+                    {
+                        case ActResult.Move:
+                            ret = true;
+                            continue;
+                        case ActResult.Reaction:
+                        case ActResult.StopMove:
+                            return true;
+                        case ActResult.Stop:
+                            return ret;
+                    }
+                }
             }
-            else if (rightFree)
+            else
             {
-                cell.xVel = 1;
-                SwapOrDisplace(caller, cell, rightTarget);
+                return ret;
             }
-
-            return leftFree || rightFree;
         }
+        return ret;
     }
 
-    /*private static int CheckSide(WorldChunk caller, Cell source, int dispersion, int direction, out Cell destination)
+    public static bool TryMoveSide(WorldChunk caller, Cell cell)
     {
+        int distance = Rubedo.Lib.Math.RoundAwayFromZero(cell.xVel);
+        int dispersion = cell.element.liquid_dispersion;//System.Math.Min(System.Math.Abs(distance), cell.element.liquid_dispersion);
 
-    }*/
+        if (distance > 0)
+        {
+            ActResult res = CheckSide(caller, cell, dispersion, 1);
+            cell.xVel += 1;
+            if (res != ActResult.Move && res != ActResult.Reaction)
+            {
+                cell.xVel *= -1;
+            }
+            switch (res)
+            {
+                case ActResult.Move:
+                case ActResult.Reaction:
+                case ActResult.StopMove:
+                    return true;
+                case ActResult.Stop:
+                    return false;
+            }
+        }
+        else if (distance < 0)
+        {
+            ActResult res = CheckSide(caller, cell, dispersion, -1);
+            cell.xVel += -1;
+            if (res != ActResult.Move && res != ActResult.Reaction)
+            {
+                cell.xVel *= -1;
+            }
+            switch (res)
+            {
+                case ActResult.Move:
+                case ActResult.Reaction:
+                case ActResult.StopMove:
+                    return true;
+                case ActResult.Stop:
+                    return false;
+            }
+        }
+        else
+        {
+            int[] order = new int[2];
+            bool leftFirst = caller.ChunkRNG.Flip();
+            if (leftFirst)
+            {
+                order[0] = -1;
+                order[1] = 1;
+            }
+            else
+            {
+                order[0] = 1;
+                order[1] = -1;
+            }
 
-    
-    private static int CheckSide(WorldChunk caller, Cell cell, int dispersion, int direction, out Cell destination)
+            for (int i = 0; i < 2; i++)
+            {
+                ActResult res = CheckSide(caller, cell, dispersion, order[i]);
+                if (res != ActResult.Move && res != ActResult.Reaction)
+                {
+                    cell.xVel *= -1;
+                }
+                switch (res)
+                {
+                    case ActResult.Move:
+                    case ActResult.Reaction:
+                    case ActResult.StopMove:
+                        cell.xVel += leftFirst ^ i == 0 ? 1 : -1;
+                        return true;
+                    case ActResult.Stop:
+                        continue;
+                }
+            }
+            return false;
+        }
+        return false;
+    }
+
+    private static ActResult CheckSide(WorldChunk caller, Cell cell, int dispersion, int direction)
     {
-        destination = cell;
+        int cellY = cell.y;
+        int cellX = cell.x;
+        ActResult res = ActResult.Stop;
         for (int i = 1; i <= dispersion; i++)
         {
-            bool free = caller.TryGetCell(cell.x + (direction * i), cell.y, out Cell target) && CanBeSwapped(cell, target);
-            if (free)
+            if (caller.TryGetCell(cellX + (direction * i), cellY, out Cell target))
             {
-                destination = target;
-                continue;
+                ActResult actRes = ActOnCell(caller, cell, target);
+                switch (actRes)
+                {
+                    case ActResult.Move:
+                        res = actRes;
+                        continue;
+                    case ActResult.Reaction:
+                    case ActResult.StopMove:
+                        return actRes;
+                    case ActResult.Stop:
+                        return res;
+                }
             }
-            return i-1;
         }
-        return dispersion;
+        return res;
     }
 
     public static bool TryFall(WorldChunk caller, Cell cell)
     {
-        cell.yVel = System.MathF.Min(cell.element.liquid_maxSpeed, cell.yVel + (caller.parentMatrix.gravity * cell.element.liquid_gravity));
-        bool success = false;
-        Cell target = null;
-        int cellX = cell.x;
+        int yVel = System.Math.Abs(Rubedo.Lib.Math.RoundAwayFromZero(cell.yVel));
+
+        bool ret = false;
         int cellY = cell.y;
-        for (int y = 1; y <= cell.yVel; y++)
+        int cellX = cell.x;
+        for (int y = 1; y <= yVel; y++)
         {
-            if (caller.TryGetCell(cellX, cellY - y, out target))
-            { //we found a cell below us!
-                if (target.IsEmpty)
-                { //we can swap immediately.
-                    cell.SwapPositions(caller, target);
-                    success = true;
-                }
-                else
-                {
-                    if (CanBeSwapped(cell, target))
-                    {
-                        SwapOrDisplace(caller, cell, target);
-                        success = true;
-                    }
-                    //we've hit something!
-                    ConvertVerticalToHorizontalMotion(cell);
-                    break;
-                }
-            }
-            else
+            if (caller.TryGetCell(cellX, cellY - y, out Cell target))
             {
-                //edge of the map.
-                SetNeighborsFreefalling(caller, cell.x, cell.y);
-                ConvertVerticalToHorizontalMotion(cell);
-                break;
+                ActResult actRes = ActOnCell(caller, cell, target);
+                switch (actRes)
+                {
+                    case ActResult.Move:
+                        ret = true;
+                        continue;
+                    case ActResult.Reaction:
+                    case ActResult.StopMove:
+                        return true;
+                    case ActResult.Stop:
+                        return ret;
+                }
             }
         }
-        return success;
+        return ret;
     }
 
     public static bool TryDiagonalDown(WorldChunk caller, Cell cell)
     {
-        //if (caller.ChunkRNG.Percent() < cell.element.liquid_inertialResistance)
-        //    return false;
+        bool downLeftExists = caller.TryGetCell(cell.x - 1, cell.y - 1, out Cell downLeft);
+        bool downRightExists = caller.TryGetCell(cell.x + 1, cell.y - 1, out Cell downRight);
 
-        bool downLeftFree = caller.TryGetCell(cell.x - 1, cell.y - 1, out Cell downLeft) && CanBeSwapped(cell, downLeft);
-        bool downRightFree = caller.TryGetCell(cell.x + 1, cell.y - 1, out Cell downRight) && CanBeSwapped(cell, downRight);
 
-        if (downLeftFree && downRightFree)
+        if (downLeftExists && downRightExists)
         {
-            downLeftFree = caller.ChunkRNG.Flip();
-            downRightFree = !downLeftFree;
-        }
+            Cell[] order = new Cell[2];
+            bool leftFirst = caller.ChunkRNG.Flip();
+            if (leftFirst)
+            {
+                order[0] = downLeft;
+                order[1] = downRight;
+            }
+            else
+            {
+                order[0] = downRight;
+                order[1] = downLeft;
+            }
 
-        if (downLeftFree)
-        {
-            cell.xVel = -1;
-            SwapOrDisplace(caller, cell, downLeft);
+            for (int i = 0; i < 2; i++)
+            {
+                ActResult actRes = ActOnCell(caller, cell, order[i]);
+                switch (actRes)
+                {
+                    case ActResult.Move:
+                    case ActResult.Reaction:
+                    case ActResult.StopMove:
+                        cell.xVel = leftFirst ^ i == 0 ? 1 : -1;
+                        //cell.yVel = -1;
+                        return true;
+                    case ActResult.Stop:
+                        continue;
+                }
+            }
+            return false;
         }
-        else if (downRightFree)
+        else if (downLeftExists)
         {
-            cell.xVel = 1;
-            SwapOrDisplace(caller, cell, downRight);
+            ActResult actRes = ActOnCell(caller, cell, downLeft);
+            switch (actRes)
+            {
+                case ActResult.Move:
+                case ActResult.Reaction:
+                case ActResult.StopMove:
+                    cell.xVel = -1;
+                    //cell.yVel = -1;
+                    return true;
+                case ActResult.Stop:
+                    return false;
+            }
         }
+        else if (downRightExists)
+        {
+            ActResult actRes = ActOnCell(caller, cell, downRight);
+            switch (actRes)
+            {
+                case ActResult.Move:
+                case ActResult.Reaction:
+                case ActResult.StopMove:
+                    cell.xVel = 1;
+                    //cell.yVel = -1;
+                    return true;
+                case ActResult.Stop:
+                    return false;
+            }
+        }
+        return false;
+    }
 
-        return downLeftFree || downRightFree;
+    /// <summary>
+    /// Try to move down 1 cell.
+    /// </summary>
+    /// <returns></returns>
+    public static bool TryMoveDown(WorldChunk caller, Cell cell)
+    {
+        int cellX = cell.x;
+        int cellY = cell.y;
+        if (caller.TryGetCell(cellX, cellY - 1, out Cell target))
+        {
+            ActResult actRes = ActOnCell(caller, cell, target);
+            switch (actRes)
+            {
+                case ActResult.Move:
+                case ActResult.Reaction:
+                case ActResult.StopMove:
+                    return true;
+                case ActResult.Stop:
+                    return false;
+            }
+        }
+        return false;
     }
     #endregion
 
@@ -180,35 +358,93 @@ public static class CellBehaviour
 
     public static bool TryDiagonalUp(WorldChunk caller, Cell cell)
     {
-        bool leftFree = caller.TryGetCell(cell.x - 1, cell.y + 1, out Cell left) && CanBeSwapped(cell, left);
-        bool rightFree = caller.TryGetCell(cell.x + 1, cell.y + 1, out Cell right) && CanBeSwapped(cell, right);
+        bool upLeftExists = caller.TryGetCell(cell.x - 1, cell.y + 1, out Cell upLeft);
+        bool upRightExists = caller.TryGetCell(cell.x + 1, cell.y + 1, out Cell upRight);
 
-        if (leftFree && rightFree)
-        {
-            leftFree = caller.ChunkRNG.Flip();
-            rightFree = !leftFree;
-        }
+        Cell[] order = new Cell[2];
 
-        if (leftFree)
+        if (upLeftExists && upRightExists)
         {
-            cell.xVel = -1;
-            SwapOrDisplace(caller, cell, left);
-        }
-        else if (rightFree)
-        {
-            cell.xVel = 1;
-            SwapOrDisplace(caller, cell, right);
-        }
+            bool leftFirst = caller.ChunkRNG.Flip();
+            if (leftFirst)
+            {
+                order[0] = upLeft;
+                order[1] = upRight;
+            }
+            else
+            {
+                order[0] = upRight;
+                order[1] = upLeft;
+            }
 
-        return leftFree || rightFree;
+            for (int i = 0; i < 2; i++)
+            {
+                ActResult actRes = ActOnCell(caller, cell, order[i]);
+                switch (actRes)
+                {
+                    case ActResult.Move:
+                    case ActResult.Reaction:
+                    case ActResult.StopMove:
+                        cell.xVel = leftFirst ^ i == 0 ? 1 : -1;
+                        //cell.yVel = -1;
+                        return true;
+                    case ActResult.Stop:
+                        continue;
+                }
+            }
+            return false;
+        }
+        else if (upLeftExists)
+        {
+            ActResult actRes = ActOnCell(caller, cell, upLeft);
+            switch (actRes)
+            {
+                case ActResult.Move:
+                case ActResult.Reaction:
+                case ActResult.StopMove:
+                    cell.xVel = -1;
+                    //cell.yVel = -1;
+                    return true;
+                case ActResult.Stop:
+                    return false;
+            }
+        }
+        else if (upRightExists)
+        {
+            ActResult actRes = ActOnCell(caller, cell, upRight);
+            switch (actRes)
+            {
+                case ActResult.Move:
+                case ActResult.Reaction:
+                case ActResult.StopMove:
+                    cell.xVel = 1;
+                    //cell.yVel = -1;
+                    return true;
+                case ActResult.Stop:
+                    return false;
+            }
+        }
+        return false;
     }
 
     public static bool TryRise(WorldChunk caller, Cell cell)
     {
-        bool free = caller.TryGetCell(cell.x, cell.y + 1, out Cell target) && CanBeSwapped(cell, target);
-        if (free)
-            cell.SwapPositions(caller, target);
-        return free;
+        int cellX = cell.x;
+        int cellY = cell.y;
+        if (caller.TryGetCell(cellX, cellY + 1, out Cell target))
+        {
+            ActResult actRes = ActOnCell(caller, cell, target);
+            switch (actRes)
+            {
+                case ActResult.Move:
+                case ActResult.Reaction:
+                case ActResult.StopMove:
+                    return true;
+                case ActResult.Stop:
+                    return false;
+            }
+        }
+        return false;
     }
     #endregion
 
@@ -229,6 +465,93 @@ public static class CellBehaviour
     {
         float absY = System.Math.Abs(cell.yVel);
         cell.xVel = cell.xVel > 0 ? absY : -absY;
-        cell.yVel = 0;
+        //cell.yVel = 0;
+    }
+
+    /// <summary>
+    /// Handles reactions and what happens when cells run into eachother.
+    /// </summary>
+    public static ActResult ActOnCell(WorldChunk caller, Cell actor, Cell target)
+    {
+        bool reacted = React(actor, target);
+        if (reacted)
+        {
+            return ActResult.Reaction;
+        }
+
+        if (target.IsEmpty)
+        {
+            actor.SwapPositions(caller, target);
+            actor.SetFreeFalling(true);
+            return ActResult.Move; //it wasn't stopped.
+        }
+
+        switch (target.element.elementType)
+        {
+            case Element.Type.PHYSICS_SOLID:
+            {
+                break;
+            }
+            case Element.Type.LIQUID:
+            {
+                if (actor.freeFalling) //we've hit something solid
+                {
+                    ConvertVerticalToHorizontalMotion(actor);
+                }
+                if (target.element.liquid_isSand)
+                {
+                    if (CanBeSwapped(actor, target))
+                    {
+                        actor.SwapPositions(caller, target);
+                        return ActResult.StopMove;
+                    }
+                    return ActResult.Stop;
+                }
+                else
+                {
+                    if (CanBeSwapped(actor, target))
+                    {
+                        SwapForDensities(caller, actor, target);
+                        if (actor.element.elementType == Element.Type.LIQUID && !actor.element.liquid_isSand)
+                        {
+                            return ActResult.Move; //fluids can move fast through other fluids.
+                        }
+                        return ActResult.StopMove;
+                    }
+                    return ActResult.Stop;
+                }
+            }
+               
+            case Element.Type.GAS:
+            {
+                if (CanBeSwapped(actor, target))
+                {
+                    SwapForDensities(caller, actor, target);
+                    return ActResult.StopMove;
+                }
+                return ActResult.Stop;
+            }
+        }
+        return ActResult.Stop; //something unknown?
+    }
+
+
+    public static bool React(Cell cell1, Cell cell2)
+    {
+        ReactionKey key;
+        if (cell2.IsEmpty)
+        {
+            key = new ReactionKey() { cellType1 = cell1.element.internalName, cellType2 = "air" };
+        }
+        else
+        {
+            key = new ReactionKey() { cellType1 = cell1.element.internalName, cellType2 = cell2.element.internalName };
+        }
+        if (ElementManager.reactions.TryGetValue(key, out Reaction reaction))
+        {
+            //TODO: Try to react
+            return true;
+        }
+        return false;
     }
 }

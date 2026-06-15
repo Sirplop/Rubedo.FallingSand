@@ -17,5 +17,6 @@
 		"tags": "[sand_other], [corrodible], [burnable], [alchemy]",
 		"color": "ff231f1a",
 		"density": 30,
+		"liquid_inertialResistance": 85
 	}
 ]

@@ -1,4 +1,5 @@
 ﻿using FallingSand.Game.World;
+using Rubedo;
 
 namespace FallingSand.Game.Elements;
 
@@ -29,7 +30,9 @@ public class Gas : Element
             else if (CellBehaviour.TryDiagonalUp(caller, cell))
                 return;
         }
-        if (CellBehaviour.MoveSide(caller, cell))
+        if (CellBehaviour.TryMoveSide(caller, cell))
             return;
+
+        cell.lastFrame = Time.RunningTime;
     }
 }

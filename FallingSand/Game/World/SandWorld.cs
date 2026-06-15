@@ -26,7 +26,7 @@ public class SandWorld : RenderableComponent
     public bool stepTick = true;
     public override RectF Bounds => WorldRect;
 
-    public int gravity = 1;
+    public float gravity = 3f;
     private int worldMinX;
     private int worldMinY;
     private int worldMaxX;
@@ -57,9 +57,9 @@ public class SandWorld : RenderableComponent
         regions = new List<WorldRegion>();
 
         AddRegion(0, 0);
-        //AddRegion(0, -1);
-        //AddRegion(-1, -1);
-        //AddRegion(-1, 0);
+        AddRegion(0, -1);
+        AddRegion(-1, -1);
+        AddRegion(-1, 0);
     }
 
     public void AddRegion(int x, int y)
@@ -240,6 +240,8 @@ public class SandWorld : RenderableComponent
         current.element = element;
         current.color = element.color * Rubedo.Lib.Random.Range(0.9f, 1.1f);
         current.freeFalling = true;
+        current.xVel = 0;
+        current.yVel = 0;
         SetCell(x, y, current);
         return true;
     }
