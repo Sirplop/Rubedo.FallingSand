@@ -10,7 +10,7 @@ namespace FallingSand.Game.Elements;
 /// </summary>
 public class Cell
 {
-    public const byte FREE_FALLING_THRESHOLD = 2; //number of frames the pixel must not move to reset free falling.
+    public const byte FREE_FALLING_THRESHOLD = 255; //number of frames the pixel must not move to reset free falling.
 
     public Element element;
     public int x;

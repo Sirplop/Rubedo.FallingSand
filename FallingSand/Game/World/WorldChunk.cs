@@ -156,7 +156,8 @@ public class WorldChunk
                     int i = GetIndex(x, y);
                     if (!movedWithFrame[i] && !elements[i].IsEmpty)
                     {
-                        elements[i].element.Step(this, elements[i]);
+                        Cell cell = elements[i];
+                        cell.element.Step(this, elements[i]);
                     }
                 }
             }
@@ -167,7 +168,8 @@ public class WorldChunk
                     int i = GetIndex(x, y);
                     if (!movedWithFrame[i] && !elements[i].IsEmpty)
                     {
-                        elements[i].element.Step(this, elements[i]);
+                        Cell cell = elements[i];
+                        cell.element.Step(this, elements[i]);
                     }
                 }
             }

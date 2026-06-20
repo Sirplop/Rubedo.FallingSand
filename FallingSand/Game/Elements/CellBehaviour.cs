@@ -230,8 +230,37 @@ public static class CellBehaviour
         return res;
     }
 
+    public static bool TryMoveDownTriple(WorldChunk caller, Cell cell)
+    {
+        bool canMoveDL = caller.TryGetCell(cell.x - 1, cell.y - 1, out Cell downLeft) && CanBeSwapped(cell, downLeft);
+        bool canMoveDR = caller.TryGetCell(cell.x + 1, cell.y - 1, out Cell downRight) && CanBeSwapped(cell, downRight);
+        bool canMoveD = caller.TryGetCell(cell.x, cell.y - 1, out Cell down) && CanBeSwapped(cell, down);
+
+        if (canMoveD && !((canMoveDR || canMoveDL) && caller.ChunkRNG.Percent() < 25))
+        {
+            if (TryFall(caller, cell))
+                return true;
+            else if (canMoveDR || canMoveDL)
+            {
+                return TryDiagonalDown(caller, cell);
+            }
+        }
+        else if (canMoveDR || canMoveDL)
+        {
+            if (TryDiagonalDown(caller, cell))
+                return true;
+            else if (canMoveD)
+            {
+                return TryFall(caller, cell);
+            }
+        }
+        return false;
+    }
+
     public static bool TryFall(WorldChunk caller, Cell cell)
     {
+        float velUpdate = caller.parentMatrix.gravity * cell.element.liquid_gravity * Time.FixedDeltaTime * 2;
+        cell.yVel = System.MathF.Min(cell.element.liquid_maxSpeed, cell.yVel - velUpdate);
         int yVel = System.Math.Abs(Rubedo.Lib.Math.RoundAwayFromZero(cell.yVel));
 
         bool ret = false;

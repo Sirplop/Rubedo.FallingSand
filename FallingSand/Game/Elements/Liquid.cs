@@ -15,60 +15,6 @@ public class Liquid : Element
         this.internalName = name;
     }
 
-    /*
-    public override void Step(WorldChunk caller, Cell cell)
-    {
-        if (liquid_isStatic)
-            return;
-
-        if (caller.TryGetCell(cell.x, cell.y - 1, out Cell t) && t.IsEmpty)
-        {
-            float velUpdate = caller.parentMatrix.gravity * cell.element.liquid_gravity * (Time.FixedDeltaTime);
-            cell.yVel = System.MathF.Min(cell.element.liquid_maxSpeed, cell.yVel + velUpdate);
-        }
-
-        if (liquid_isSand)
-        {
-            if (cell.freeFalling && caller.ChunkRNG.Percent() < 15)
-            { //try to move diagonally first
-                if (CellBehaviour.TryDiagonalDown(caller, cell))
-                    return;
-                else if (CellBehaviour.TryFall(caller, cell))
-                    return;
-            }
-            else
-            {
-                if (CellBehaviour.TryFall(caller, cell))
-                    return;
-                else if (CellBehaviour.TryDiagonalDown(caller, cell))
-                    return;
-            }
-        }
-        else
-        {
-            if (cell.freeFalling && caller.ChunkRNG.Percent() < 25)
-            { //try to move diagonally first
-                if (CellBehaviour.TryDiagonalDown(caller, cell))
-                    return;
-                else if (CellBehaviour.TryFall(caller, cell))
-                    return;
-            }
-            else
-            {
-                if (CellBehaviour.TryFall(caller, cell))
-                    return;
-                else if (CellBehaviour.TryDiagonalDown(caller, cell))
-                    return;
-            }
-            if (CellBehaviour.TryMoveSide(caller, cell))
-                return;
-        }
-
-        cell.freeFallingCount++;
-        if (cell.freeFallingCount >= Cell.FREE_FALLING_THRESHOLD)
-            cell.freeFalling = false; //failed to move.
-    }*/
-
 
     public override void Step(WorldChunk caller, Cell cell)
     {
@@ -78,8 +24,6 @@ public class Liquid : Element
 
         if (cell.freeFalling)
         {
-            float velUpdate = caller.parentMatrix.gravity * cell.element.liquid_gravity * Time.FixedDeltaTime * 2;
-            cell.yVel = System.MathF.Min(cell.element.liquid_maxSpeed, cell.yVel - velUpdate);
             cell.xVel *= 0.8f;
         }
 
@@ -87,24 +31,16 @@ public class Liquid : Element
         {
             if (cell.freeFalling)
             {
-                if (caller.ChunkRNG.Percent() < 25)
-                {
-                    if (CellBehaviour.TryDiagonalDown(caller, cell))
-                        return;
-                    else if (CellBehaviour.TryFall(caller, cell))
-                        return;
-                }
-                else
-                {
-                    if (CellBehaviour.TryFall(caller, cell))
-                        return;
-                    else if (CellBehaviour.TryDiagonalDown(caller, cell))
-                        return;
-                }
+                if (CellBehaviour.TryMoveDownTriple(caller, cell))
+                    return;
 
                 cell.freeFallingCount++;
                 if (cell.freeFallingCount >= Cell.FREE_FALLING_THRESHOLD)
+                {
                     cell.freeFalling = false; //failed to move.
+                    cell.yVel = 0;
+                    cell.xVel = 0;
+                }
             }
             else
             {
@@ -114,22 +50,23 @@ public class Liquid : Element
         }
         else //this is a liquid like water
         {
-            if (caller.ChunkRNG.Percent() < 25)
-            {
-                if (CellBehaviour.TryDiagonalDown(caller, cell))
-                    return;
-                else if (CellBehaviour.TryFall(caller, cell))
-                    return;
-            }
-            else
-            {
-                if (CellBehaviour.TryFall(caller, cell))
-                    return;
-                else if (CellBehaviour.TryDiagonalDown(caller, cell))
-                    return;
-            }
-            if (CellBehaviour.TryMoveSide(caller, cell))
+            if (CellBehaviour.TryMoveDownTriple(caller, cell))
                 return;
+
+            if (CellBehaviour.TryMoveSide(caller, cell))
+            {
+                cell.yVel *= 0.5f; //we should stop moving down so fast.
+                return;
+            }
+
+            cell.freeFallingCount++;
+            if (cell.freeFallingCount >= Cell.FREE_FALLING_THRESHOLD)
+            {
+                cell.freeFallingCount = 0;
+                cell.yVel = 0;
+                cell.xVel = 0;
+            }
+
         }
 
         cell.lastFrame = Time.RunningTime;
