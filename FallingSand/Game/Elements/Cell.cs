@@ -2,6 +2,7 @@
 using Microsoft.Xna.Framework;
 using Rubedo;
 using System;
+using System.Runtime.CompilerServices;
 
 namespace FallingSand.Game.Elements;
 
@@ -12,7 +13,8 @@ public class Cell
 {
     public const byte FREE_FALLING_THRESHOLD = 255; //number of frames the pixel must not move to reset free falling.
 
-    public Element element;
+    public Element element = null;
+    private bool empty;
     public int x;
     public int y;
     public Color color;
@@ -24,19 +26,39 @@ public class Cell
     public byte freeFallingCount = 0;
     public double lastFrame = 0;
 
-    public bool IsEmpty => element == null;
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public bool IsEmpty()
+    {
+        return empty;
+    }
 
     public Cell(int x, int y)
     {
         this.x = x;
         this.y = y;
         color = Color.Transparent;
+        empty = true;
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void SetFreeFalling(bool value)
     {
         this.freeFalling = value;
         freeFallingCount = 0;
+    }
+
+    public void SetElement(Element element)
+    {
+        this.element = element;
+        if (element == null)
+        {
+            this.color = Color.Transparent;
+        }
+        else
+        {
+            this.color = element.color * Rubedo.Lib.Random.Range(0.9f, 1.1f);
+        }
+        this.empty = element == null;
     }
 
 
@@ -53,7 +75,9 @@ public class Cell
         caller.SetCell(toSwap, cellX, cellY);
         caller.SetCell(this, toSwapX, toSwapY);
 
-        this.freeFalling = true;
+        this.SetFreeFalling(true);
+        toSwap.SetFreeFalling(true);
+
         caller.SetFreeFalling(caller, toSwapX + 1, toSwapY);
         caller.SetFreeFalling(caller, toSwapX - 1, toSwapY);
         caller.SetFreeFalling(caller, cellX + 1, cellY);
@@ -87,9 +111,9 @@ public class Cell
         int cellX = cell.x;
         int cellY = cell.y;
 
-        bool upFree = caller.TryGetCell(cellX, cellY + 1, out Cell up) && up != source && up.IsEmpty;
-        bool upLeftFree = caller.TryGetCell(cellX - 1, cellY + 1, out Cell upLeft) && upLeft != source && upLeft.IsEmpty;
-        bool upRightFree = caller.TryGetCell(cellX + 1, cellY + 1, out Cell upRight) && upRight != source && upRight.IsEmpty;
+        bool upFree = caller.TryGetCell(cellX, cellY + 1, out Cell up) && up != source && up.IsEmpty();
+        bool upLeftFree = caller.TryGetCell(cellX - 1, cellY + 1, out Cell upLeft) && upLeft != source && upLeft.IsEmpty();
+        bool upRightFree = caller.TryGetCell(cellX + 1, cellY + 1, out Cell upRight) && upRight != source && upRight.IsEmpty();
 
         int flip = Rubedo.Lib.Random.Range(0, 3);
         Cell displaced = null;

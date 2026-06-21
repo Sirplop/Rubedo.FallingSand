@@ -1,10 +1,14 @@
 ﻿#define USE_MULTITHREADING
 
+using FallingSand.Game.Elements;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using Rubedo;
 using Rubedo.Graphics;
+using System;
+using System.Collections;
 using System.Threading.Tasks;
+using System.Xml.Linq;
 
 namespace FallingSand.Game.World;
 
@@ -17,14 +21,24 @@ public class WorldRegion
 
     private Color[] textureData;
     private readonly Texture2D texture;
-    private int regionSize;
-    private int chunkSize;
-    private int chunksPerRegion;
-    private int regionX;
-    private int regionY;
+    private readonly int regionSize;
+    private readonly int chunkSize;
+    private readonly int chunksPerRegion;
+    private readonly int regionX;
+    private readonly int regionY;
     private readonly int sizeShift;
+    private readonly int regionMask;
 
+    public readonly Cell[] cells;
+    public readonly bool[] dirtyRectStep;
     public WorldChunk[] chunks;
+
+    //we double up the movedWithFrame array so we can reset
+    //one while we use the other for the frame. Purely for performance.
+    private readonly bool[] movedWithFrame1;
+    private readonly bool[] movedWithFrame2;
+    private bool frameFlip = false;
+    private Task movedWithFrameReset = null;
 
     public WorldRegion(SandWorld world, int chunkSize, int chunksPerRegion, int x, int y)
     {
@@ -35,21 +49,36 @@ public class WorldRegion
         this.regionY = y * regionSize;
 
         sizeShift = Rubedo.Lib.Math.GetPower2Exponent(this.chunkSize);
+        regionMask = regionSize - 1;
 
         textureData = new Color[regionSize * regionSize];
         texture = new Texture2D(RubedoEngine.Graphics.GraphicsDevice, regionSize, regionSize);
         chunks = new WorldChunk[chunksPerRegion * chunksPerRegion];
+        dirtyRectStep = new bool[regionSize * regionSize];
+        movedWithFrame1 = new bool[regionSize * regionSize];
+        movedWithFrame2 = new bool[regionSize * regionSize];
+        cells = new Cell[regionSize * regionSize];
+
+        int cellCount = regionSize * regionSize;
+        for (int i = 0; i < cellCount; i++)
+        {
+            int y1 = (i / regionSize) + regionY;
+            int x1 = (i % regionSize) + regionX;
+            cells[i] = new Cell(x1, y1);
+        }
+
         for (int my = 0; my < chunksPerRegion; my++)
         {
-            int dY = (y * chunksPerRegion) + my; //y >= 0 ? (y * chunksPerRegion) + my : (chunksPerRegion - my - 1) + (y * chunksPerRegion);
+            int dY = (y * chunksPerRegion) + my;
             for (int mx = 0; mx < chunksPerRegion; mx++)
             {
-                int dX = (x * chunksPerRegion) + mx; //x >= 0 ? (x * chunksPerRegion) + mx : (chunksPerRegion - mx - 1) + (x * chunksPerRegion);
-                chunks[mx + (my * chunksPerRegion)] = new WorldChunk(world, dX, dY, chunkSize);
+                int dX = (x * chunksPerRegion) + mx;
+                chunks[mx + (my * chunksPerRegion)] = new WorldChunk(world, this, dX, dY, chunkSize);
             }
         }
     }
 
+#region Querying
     public WorldChunk GetChunk(int x, int y)
     {
         int regionMask = regionSize - 1; // must be power of 2
@@ -64,8 +93,91 @@ public class WorldRegion
         return chunks[index];
     }
 
+    public Cell GetCell(int x, int y)
+    {
+        int i = GetIndex(x, y);
+        return cells[i];
+    }
+    public Cell GetCell(int index)
+    {
+        return cells[index];
+    }
+
+    public int GetIndex(int x, int y)
+    {
+        int localX = x & regionMask;
+        int localY = y & regionMask;
+        return localY * regionSize + localX;
+    }
+
+    public bool GetMovedWithFrame(int x, int y)
+    {
+        int i = GetIndex(x, y);
+        return frameFlip ? movedWithFrame2[i] : movedWithFrame1[i];
+    }
+    public bool GetMovedWithFrame(int index)
+    {
+        return frameFlip ? movedWithFrame2[index] : movedWithFrame1[index];
+    }
+    #endregion
+    #region Setters
+    public void SetCell(Cell cell, int x, int y)
+    {
+        WorldChunk chunk = GetChunk(x, y);
+
+        if (chunk != null)
+            chunk.SetCell(cell, x, y);
+    }
+    public void SetMovedWithFrame(int x, int y)
+    {
+        int i = GetIndex(x, y);
+        if (frameFlip)
+        {
+            movedWithFrame2[i] = true;
+        }
+        else
+        {
+            movedWithFrame1[i] = true;
+        }
+    }
+    public void SetMovedWithFrame(int index)
+    {
+        if (frameFlip)
+        {
+            movedWithFrame2[index] = true;
+        }
+        else
+        {
+            movedWithFrame1[index] = true;
+        }
+    }
+#endregion
+
+    private void ResetMovedWithFrame()
+    {
+        if (frameFlip)
+        {
+            for (int i = 0; i < movedWithFrame1.Length; i++)
+            {
+                movedWithFrame1[i] = false;
+            }
+        }
+        else
+        {
+            for (int i = 0; i < movedWithFrame1.Length; i++)
+            {
+                movedWithFrame2[i] = false;
+            }
+        }
+    }
+
     public void MultithreadSetup(SandWorld world)
     {
+        movedWithFrameReset?.Wait();
+        frameFlip = !frameFlip;
+        movedWithFrameReset = new Task(ResetMovedWithFrame);
+        movedWithFrameReset.Start();
+
 #if USE_MULTITHREADING
         Parallel.For(0, chunks.Length, (i) =>
         {
@@ -89,10 +201,6 @@ public class WorldRegion
 #endif
     }
 
-    public int GetDrawIndex(int x, int y)
-    {
-        return (x - regionX) + ((y - regionY) * chunksPerRegion * chunkSize);
-    }
 
     public void Draw(Renderer renderer, Camera camera, float layer)
     {

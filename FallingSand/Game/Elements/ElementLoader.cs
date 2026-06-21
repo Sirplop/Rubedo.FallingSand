@@ -14,7 +14,9 @@ namespace FallingSand.Game.Elements;
 /// </summary>
 public static class ElementLoader
 {
-    public static List<Element> PopulateElements(List<ProtoElement> elements)
+    private static int element_id = 1;
+
+    public static Element[] PopulateElements(List<ProtoElement> elements)
     {
         List<Element> result = new List<Element>();
 
@@ -76,9 +78,11 @@ public static class ElementLoader
             removeFromWorking.Clear();
         }
 
+        Element[] res = result.ToArray();
+
         //TODO: Reactions
 
-        return result;
+        return res;
     }
 
     public static List<ProtoElement> LoadProtoElements(string[] paths)
@@ -205,6 +209,8 @@ public static class ElementLoader
                 element.def_liquid_friction = true;
             }
 
+            element.element_id = element_id++;
+
             elements[i++] = element;
         }
 
@@ -283,6 +289,7 @@ public static class ElementLoader
             element.liquid_inertialResistance = liquid_inertialResistance;
             element.liquid_friction = liquid_friction;
 
+            element.element_id = this.element_id;
             finishedConstruction = true;
 
             return element;
@@ -338,6 +345,7 @@ public static class ElementLoader
             element.liquid_inertialResistance = def_liquid_inertialResistance ? liquid_inertialResistance : parentElement.liquid_inertialResistance;
             element.liquid_friction = def_liquid_friction ? liquid_friction : parentElement.liquid_friction;
 
+            element.element_id = this.element_id;
             finishedConstruction = true;
 
             return element;

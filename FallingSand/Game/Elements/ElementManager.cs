@@ -17,6 +17,8 @@ public static class ElementManager
 
     public static Dictionary<string, HashSet<Element>> tags;
 
+    private static Element[] elements;
+
     public static void Initialize()
     {
         reactions = new Dictionary<ReactionKey, Reaction>();
@@ -52,11 +54,11 @@ public static class ElementManager
             prototypes.AddRange(ElementLoader.LoadProtoElements(paths));
         }
 
-        List<Element> elementValues = ElementLoader.PopulateElements(prototypes);
+        elements = ElementLoader.PopulateElements(prototypes);
 
-        for (int i = 0; i < elementValues.Count; i++)
+        for (int i = 0; i < elements.Length; i++)
         {
-            Element element = elementValues[i];
+            Element element = elements[i];
             elementsByName.Add(element.internalName, element);
             elementsByColor.Add(element.color, element);
             if (element.tags != null)

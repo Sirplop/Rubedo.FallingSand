@@ -48,6 +48,7 @@ public class WorldState : GameState
     private readonly KeyCondition toggleRects = new KeyCondition(Keys.V);
     private readonly KeyCondition togglePosition = new KeyCondition(Keys.B);
     private readonly KeyCondition toggleCellDetails = new KeyCondition(Keys.N);
+    private readonly KeyCondition toggleDrawOverride = new KeyCondition(Keys.X);
 
     private Shapes shapes;
 
@@ -61,6 +62,7 @@ public class WorldState : GameState
     private bool drawRects = false;
     private bool drawPosition = false;
     private bool drawCellDetails = false;
+    private bool drawMoveOverride = false;
 
     public WorldState(StateManager sm) : base(sm)
     {
@@ -170,7 +172,7 @@ public class WorldState : GameState
             string material = "???";
             if (cell != null)
             {
-                if (cell.IsEmpty)
+                if (cell.IsEmpty())
                     material = "air";
                 else
                     material = cell.element.internalName;
@@ -183,9 +185,16 @@ public class WorldState : GameState
             Label world = mouseVertical.Children[0] as Label;
             world.Text = material + " - "+mouse.ToNiceString("0");
 
-            if (drawCellDetails && cell != null && !cell.IsEmpty)
+            if (drawCellDetails && cell != null && !cell.IsEmpty())
             {
-                world.Text += $"\nVelocity: {cell.xVel}, {cell.yVel}\nFreefalling: {cell.freeFalling}, {cell.freeFallingCount}\nLast Frame: {cell.lastFrame}";
+                world.Text += $"\nCell Pos: {cell.x}, {cell.y}" +
+                    $"\nVelocity: {cell.xVel}, {cell.yVel}" +
+                    $"\nFreefalling: {cell.freeFalling}, {cell.freeFallingCount}" +
+                    $"\nLast Frame: {cell.lastFrame}";
+            }
+            else if (drawCellDetails && cell != null)
+            {
+                world.Text += $"\nCell Pos: {cell.x}, {cell.y}";
             }
         }
     }
@@ -259,6 +268,11 @@ public class WorldState : GameState
         if (toggleCellDetails.Pressed())
         {
             drawCellDetails = !drawCellDetails;
+        }
+        if (toggleDrawOverride.Pressed())
+        {
+            drawMoveOverride = !drawMoveOverride;
+            world.drawMoveOverride = drawMoveOverride;
         }
     }
 

@@ -14,6 +14,6 @@ public struct Reaction
 
 public struct ReactionKey
 {
-    public string cellType1;
-    public string cellType2;
+    public int cellType1;
+    public int cellType2;
 }

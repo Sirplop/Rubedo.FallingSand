@@ -16,6 +16,8 @@ public abstract class Element
         GAS
     }
 
+    public int element_id; //assigned by the system on element load, for quicker reaction lookups.
+
     public string[] tags;
     public Type elementType;
     public string internalName; //internal name

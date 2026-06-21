@@ -30,7 +30,7 @@ public static class CellBehaviour
 
     public static bool CanBeSwapped(Cell cell, Cell target)
     {
-        if (target.IsEmpty)
+        if (target.IsEmpty())
             return true;
         if (target.element.liquid_isStatic)
             return false;
@@ -236,7 +236,7 @@ public static class CellBehaviour
         bool canMoveDR = caller.TryGetCell(cell.x + 1, cell.y - 1, out Cell downRight) && CanBeSwapped(cell, downRight);
         bool canMoveD = caller.TryGetCell(cell.x, cell.y - 1, out Cell down) && CanBeSwapped(cell, down);
 
-        if (canMoveD && !((canMoveDR || canMoveDL) && caller.ChunkRNG.Percent() < 25))
+        if (canMoveD)// && !((canMoveDR || canMoveDL) && caller.ChunkRNG.Percent() < 25))
         {
             if (TryFall(caller, cell))
                 return true;
@@ -479,7 +479,7 @@ public static class CellBehaviour
 
     public static void SwapOrDisplace(WorldChunk caller, Cell cell, Cell target)
     {
-        if (!target.IsEmpty)
+        if (!target.IsEmpty())
             cell.Displace(caller, target);
         else
             cell.SwapPositions(caller, target);
@@ -508,7 +508,7 @@ public static class CellBehaviour
             return ActResult.Reaction;
         }
 
-        if (target.IsEmpty)
+        if (target.IsEmpty())
         {
             actor.SwapPositions(caller, target);
             actor.SetFreeFalling(true);
@@ -568,13 +568,13 @@ public static class CellBehaviour
     public static bool React(Cell cell1, Cell cell2)
     {
         ReactionKey key;
-        if (cell2.IsEmpty)
+        if (cell2.IsEmpty())
         {
-            key = new ReactionKey() { cellType1 = cell1.element.internalName, cellType2 = "air" };
+            key = new ReactionKey() { cellType1 = cell1.element.element_id, cellType2 = 0 };
         }
         else
         {
-            key = new ReactionKey() { cellType1 = cell1.element.internalName, cellType2 = cell2.element.internalName };
+            key = new ReactionKey() { cellType1 = cell1.element.element_id, cellType2 = cell2.element.element_id };
         }
         if (ElementManager.reactions.TryGetValue(key, out Reaction reaction))
         {

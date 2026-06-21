@@ -37,6 +37,8 @@ public class SandWorld : RenderableComponent
     public int chunksPerRegion;
     public int regionSize;
 
+    public bool drawMoveOverride = false;
+
     public readonly Dictionary<int, Dictionary<int, WorldRegion>> regionLookup;
     public readonly List<WorldRegion> regions;
     private Squirrel3 rnd = new Squirrel3();
@@ -56,10 +58,18 @@ public class SandWorld : RenderableComponent
         regionLookup = new Dictionary<int, Dictionary<int, WorldRegion>>();
         regions = new List<WorldRegion>();
 
-        AddRegion(0, 0);
-        AddRegion(0, -1);
-        AddRegion(-1, -1);
-        AddRegion(-1, 0);
+        const int REGION_X = 1;
+        const int REGION_Y = 1;
+
+        for (int x = 0; x < REGION_X; x++)
+        {
+            for (int y = 0; y < REGION_Y; y++)
+            {
+                int x2 = x - (REGION_X / 2);
+                int y2 = y - (REGION_Y / 2);
+                AddRegion(x2, y2);
+            }
+        }
     }
 
     public void AddRegion(int x, int y)
@@ -122,7 +132,7 @@ public class SandWorld : RenderableComponent
         }
 
         const int GRIDSIZE = 2;
-        const int PASSES = 2;
+        const int PASSES = 3;
 
         _updateGrid.Clear();
         for (int i = 0; i < GRIDSIZE * GRIDSIZE; i++)
@@ -234,11 +244,10 @@ public class SandWorld : RenderableComponent
             return false;
         }
         Cell current = GetCell(x, y);
-        if (!current.IsEmpty)
+        if (!current.IsEmpty())
             return false;
 
-        current.element = element;
-        current.color = element.color * Rubedo.Lib.Random.Range(0.9f, 1.1f);
+        current.SetElement(element);
         current.freeFalling = true;
         current.xVel = 0;
         current.yVel = 0;
@@ -253,9 +262,9 @@ public class SandWorld : RenderableComponent
             return false;
         }
         Cell current = GetCell(x, y);
-        if (current.IsEmpty)
+        if (current.IsEmpty())
             return false;
-        current.element = null;
+        current.SetElement(null);
         current.color = Color.Transparent;
         SetCell(x, y, current);
         return true;
