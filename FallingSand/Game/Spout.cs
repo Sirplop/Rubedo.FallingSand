@@ -11,10 +11,10 @@ namespace FallingSand.Game;
 public class Spout : Component
 {
     SandWorld worldRef;
-    Element element;
+    readonly int element;
     float life;
 
-    public Spout(SandWorld world, Element element, float lifetime)
+    public Spout(SandWorld world, int element, float lifetime)
     {
         this.worldRef = world;
         this.element = element;

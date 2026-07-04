@@ -12,6 +12,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using System.Threading.Tasks;
+using System.Xml.Linq;
 
 namespace FallingSand.Game.World;
 
@@ -20,13 +21,14 @@ namespace FallingSand.Game.World;
 /// </summary>
 public class SandWorld : RenderableComponent
 {
-    private float accumulatedDelta = 0;
-    public const float SAND_UPDATE_TIME = 1f / 60;
+    public const int GRAVITY_FRAME = 10;
     public bool doTick = true;
     public bool stepTick = true;
+    public bool uncapUpdates = false;
+
     public override RectF Bounds => WorldRect;
 
-    public float gravity = 3f;
+    public int gravity = 3;
     private int worldMinX;
     private int worldMinY;
     private int worldMaxX;
@@ -36,6 +38,7 @@ public class SandWorld : RenderableComponent
     public int chunkSize;
     public int chunksPerRegion;
     public int regionSize;
+    public int gravityFrame = 0;
 
     public bool drawMoveOverride = false;
 
@@ -43,10 +46,19 @@ public class SandWorld : RenderableComponent
     public readonly List<WorldRegion> regions;
     private Squirrel3 rnd = new Squirrel3();
 
-    public SandWorld(int chunkSize, int chunksPerRegion)
+    public readonly bool headless;
+    public int worldTick = 0;
+
+    public SandWorld(int chunkSize, int chunksPerRegion, bool headless = false)
     {
+        this.headless = headless;
         AlwaysDraw = true;
         LayerDepth = 0;
+
+        if (!Rubedo.Lib.Math.IsPowerOf2(chunkSize) || !Rubedo.Lib.Math.IsPowerOf2(chunkSize))
+        {
+            throw new ArgumentException("chunkSize and chunksPerRegion must be powers of 2!");
+        }
 
         this.chunksPerRegion = chunksPerRegion;
         this.chunkSize = chunkSize;
@@ -58,8 +70,8 @@ public class SandWorld : RenderableComponent
         regionLookup = new Dictionary<int, Dictionary<int, WorldRegion>>();
         regions = new List<WorldRegion>();
 
-        const int REGION_X = 1;
-        const int REGION_Y = 1;
+        const int REGION_X = 6;
+        const int REGION_Y = 6;
 
         for (int x = 0; x < REGION_X; x++)
         {
@@ -83,9 +95,6 @@ public class SandWorld : RenderableComponent
         }
         xDict.Add(x, region);
 
-        int sx = (x >> 31);
-        int sy = (y >> 31);
-
         if (x * regionSize < worldMinX)
             worldMinX = x * regionSize;
         if ((x + 1) * regionSize > worldMaxX)
@@ -98,25 +107,23 @@ public class SandWorld : RenderableComponent
 
     public override void FixedUpdate()
     {
-        accumulatedDelta += Time.FixedDeltaTime;
-
-        // Avoid accumulator death spiral
-        if (accumulatedDelta > SAND_UPDATE_TIME * 5)
-            accumulatedDelta = SAND_UPDATE_TIME * 5;
-
-        while (accumulatedDelta > SAND_UPDATE_TIME)
+        if (uncapUpdates)
+            return;
+        if (doTick)
         {
-            if (doTick)
-            {
-                MultiStep();
-            }
-            else if (stepTick)
-            {
-                stepTick = false;
-                MultiStep();
-            }
-            accumulatedDelta -= SAND_UPDATE_TIME;
+            MultiStep();
         }
+        else if (stepTick)
+        {
+            stepTick = false;
+            MultiStep();
+        }
+    }
+
+    public override void Update()
+    {
+        if (uncapUpdates)
+            MultiStep();
     }
 
     private List<List<WorldChunk>> _updateGrid = new List<List<WorldChunk>>();
@@ -132,7 +139,7 @@ public class SandWorld : RenderableComponent
         }
 
         const int GRIDSIZE = 2;
-        const int PASSES = 3;
+        const int PASSES = 2;
 
         _updateGrid.Clear();
         for (int i = 0; i < GRIDSIZE * GRIDSIZE; i++)
@@ -148,6 +155,7 @@ public class SandWorld : RenderableComponent
             for (int j = 0; j < chunksPerRegion * chunksPerRegion; j++)
             {
                 WorldChunk chunk = region.chunks[j];
+                chunk.worldTick = this.worldTick;
                 if (chunk.DirtyRect.Width == 0 && chunk.DirtyRect.Height == 0)
                     continue; //nothing to do.
                 int x = System.Math.Abs((chunk.chunkX / chunk.size) % GRIDSIZE);
@@ -157,7 +165,12 @@ public class SandWorld : RenderableComponent
             }
         }
 
-        _updateGrid.FYShuffle(ref rnd);
+        //_updateGrid.FYShuffle(ref rnd);
+        if (flip)
+        {
+            _updateGrid.Reverse();
+        }
+        flip = !flip;
 
         for (int z = 1; z <= PASSES; z++)
         {
@@ -181,6 +194,8 @@ public class SandWorld : RenderableComponent
             if (regions[i].active)
                 regions[i].MultithreadFinish(this);
         }
+
+        this.worldTick++;
     }
 
     private void RunChunkUpdate(int i)
@@ -215,43 +230,49 @@ public class SandWorld : RenderableComponent
         return region.GetChunk(x, y);
     }
 
-    public Cell GetCell(int x, int y)
-    {
-        if (InBounds(x, y))
-            return GetChunk(x, y)?.GetCell(x, y);
-        return null;
-    }
-
-    public bool SetCell(int x, int y, Cell cell)
-    {
-        WorldChunk chunk = GetChunk(x, y);
-        bool exists = chunk != null;
-        if (exists)
-            chunk.SetCell(cell, x, y);
-        return exists;
-    }
-
     public bool InBounds(int x, int y)
     {
         return x >= worldMinX && x <= worldMaxX && y >= worldMinY && y <= worldMaxY;
     }
 
-
-    public bool SpawnCell(Element element, int x, int y)
+    public bool SpawnCell(int element, int x, int y)
     {
         if (!InBounds(x, y))
         {
             return false;
         }
-        Cell current = GetCell(x, y);
-        if (!current.IsEmpty())
+        WorldChunk chunk = GetChunk(x, y);
+        if (chunk == null)
             return false;
 
-        current.SetElement(element);
-        current.freeFalling = true;
-        current.xVel = 0;
-        current.yVel = 0;
-        SetCell(x, y, current);
+        int cellID = chunk.GetCellIndex(in x, in y);
+        if (chunk.element[cellID] != 0)
+            return false;
+
+        chunk.element[cellID] = element;
+        ref WorldChunk.Moving moving = ref chunk.moving[cellID];
+        moving.isMoving = true;
+        moving.movingCount = 0; //naughty naughty, mutating a struct...
+
+        chunk.velocity[cellID] = new Vector2(0, 0);
+        chunk.color[cellID] = ElementManager.color[element] * rnd.Range(0.9f, 1.1f);
+        chunk.ThreadEnvelop(x, y);
+        return true;
+    }
+
+    public bool SpawnCell(int element, WorldChunk chunk, int cellID)
+    {
+        if (chunk.element[cellID] != 0)
+            return false;
+
+        chunk.element[cellID] = element;
+        ref WorldChunk.Moving moving = ref chunk.moving[cellID];
+        moving.isMoving = true;
+        moving.movingCount = 0; //naughty naughty, mutating a struct...
+
+        chunk.velocity[cellID] = new Vector2(0, 0);
+        chunk.color[cellID] = ElementManager.color[element] * rnd.Range(0.9f, 1.1f);
+        chunk.ThreadEnvelop(cellID);
         return true;
     }
 
@@ -261,12 +282,22 @@ public class SandWorld : RenderableComponent
         {
             return false;
         }
-        Cell current = GetCell(x, y);
-        if (current.IsEmpty())
+        WorldChunk chunk = GetChunk(x, y);
+        if (chunk == null)
             return false;
-        current.SetElement(null);
-        current.color = Color.Transparent;
-        SetCell(x, y, current);
+
+        int cellID = chunk.GetCellIndex(in x, in y);
+        if (chunk.element[cellID] == 0)
+            return false;
+
+        chunk.element[cellID] = 0;
+        ref WorldChunk.Moving moving = ref chunk.moving[cellID];
+        moving.isMoving = true;
+        moving.movingCount = 0; //naughty naughty, mutating a struct...
+
+        chunk.velocity[cellID] = new Vector2(0, 0);
+        chunk.color[cellID] = ElementManager.color[ElementManager.EMPTY];
+        chunk.ThreadEnvelop(x, y);
         return true;
     }
 

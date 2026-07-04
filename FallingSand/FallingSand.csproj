@@ -29,6 +29,10 @@
   </ItemGroup>
   
   <ItemGroup>
+    <PackageReference Include="Tracy-CSharp" Version="0.13.1" />
+  </ItemGroup>
+  
+  <ItemGroup>
     <ProjectReference Include="..\..\Learninging\Rubedo\Rubedo.csproj" />
   </ItemGroup>
 
@@ -43,5 +47,6 @@
 
   <PropertyGroup>
     <DisableFastUpToDateCheck>true</DisableFastUpToDateCheck>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
 </Project>

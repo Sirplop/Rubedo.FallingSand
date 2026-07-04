@@ -2,6 +2,7 @@
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
+using Rubedo;
 
 namespace FallingSand;
 
@@ -10,6 +11,7 @@ public class FallingSand : Rubedo.RubedoEngine
     public FallingSand() : base()
     {
         Graphics.SynchronizeWithVerticalRetrace = true; //vsync
+        Time.SetFixedDeltaTime(1f / 60f);
     }
 
     protected override void LoadContent()

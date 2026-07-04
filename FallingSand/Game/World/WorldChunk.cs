@@ -1,13 +1,15 @@
 ﻿#define USE_SHUFFLE_X
+//#define USE_DOUBLE_MWF_BUFFER
 
 using FallingSand.Game.Elements;
+using Loyc;
 using Microsoft.Xna.Framework;
 using Rubedo.Graphics;
 using Rubedo.Lib;
 using Rubedo.Lib.Extensions;
 using System;
-using System.Collections;
 using System.Runtime.CompilerServices;
+using System.Threading.Tasks;
 
 namespace FallingSand.Game.World;
 
@@ -16,8 +18,8 @@ namespace FallingSand.Game.World;
 /// </summary>
 public class WorldChunk
 {
-    private Squirrel3 chunkRNG;
-    public ref Squirrel3 ChunkRNG => ref chunkRNG;
+    public Squirrel3 chunkRNG;
+    public ReactionKey reactionCache;
 
     //TODO: Implement switching between two bitarrays to make resets faster.
     /*private readonly BitArray movedWithFrame2;
@@ -28,6 +30,26 @@ public class WorldChunk
 
     public readonly int chunkX; //starting coordinate in world space
     public readonly int chunkY; //starting coordinate in world space
+    public int worldTick;
+
+    //CELL DATA
+    public readonly int[] element;
+    public readonly Vector2[] velocity;
+    public readonly Moving[] moving;
+    public readonly Color[] color;
+
+    public readonly bool[] dirtyRectStep;
+
+#if USE_DOUBLE_MWF_BUFFER
+    //we double up the movedWithFrame array so we can reset
+    //one while we use the other for the frame. Purely for performance.
+    private readonly bool[] movedWithFrame1;
+    private readonly bool[] movedWithFrame2;
+    private bool frameFlip = false;
+    private Task movedWithFrameReset = null;
+#else
+    public readonly bool[] movedWithFrame;
+#endif
 
     public ref Rectangle DirtyRect => ref dirtyRect;
     public ref Rectangle RenderRect => ref renderRect;
@@ -39,6 +61,7 @@ public class WorldChunk
     public readonly WorldRegion region;
 
     public readonly int size;
+    public readonly int indexSize;
     public readonly int sizeShift;
     public readonly int halfSize;
     public readonly int halfSizeShift;
@@ -46,10 +69,13 @@ public class WorldChunk
     private int[] shuffledX; //this is the entire chunk grid.
     private WorldChunk[] multithreadChunkRef;
 
+    public int gravity;
+
     public WorldChunk(SandWorld parent, WorldRegion region, int worldX, int worldY, int size)
     {
         chunkRNG = new Squirrel3(unchecked((long)worldX << 32 | (uint)worldY));
 
+        this.indexSize = size * size;
         this.region = region;
         this.parentMatrix = parent;
         this.size = size;
@@ -59,13 +85,33 @@ public class WorldChunk
         this.chunkX = worldX * size;
         this.chunkY = worldY * size;
         cameraIntersection = new RectF(chunkX - 4, chunkY - 4, size + 8, size + 8);
-        shuffledX = new int[size * size];
+
+        shuffledX = new int[indexSize];
+        dirtyRectStep = new bool[indexSize];
+        element = new int[indexSize];
+        velocity = new Vector2[indexSize];
+        moving = new Moving[indexSize];
+        color = new Color[indexSize];
+
+#if USE_DOUBLE_MWF_BUFFER
+        movedWithFrame1 = new bool[indexSize];
+        movedWithFrame2 = new bool[indexSize];
+#else
+        movedWithFrame = new bool[indexSize];
+#endif
 
         renderRect = new Rectangle(chunkX, chunkY, size, size);
 
-        for (int i = 0; i < shuffledX.Length; i++)
+        for (int i = 0; i < indexSize; i++)
         {
-            shuffledX[i] = i;
+            int y1 = (i / size);
+            int x1 = (i % size);
+            shuffledX[i] = x1 + chunkX;
+
+            element[i] = 0;
+            velocity[i] = new Vector2(0, 0);
+            moving[i] = new Moving() { isMoving = false, movingCount = 0 };
+            color[i] = Color.Transparent;
         }
 
         multithreadChunkRef = new WorldChunk[9];
@@ -77,19 +123,64 @@ public class WorldChunk
         {
             for (int x = startX; x < endX; x++)
             {
-                int i = GetIndex(x, y);
-                shuffledX[GetLocalIndex(x, y)] = i;
+                shuffledX[GetCellIndex(in x, in y)] = x;
             }
-            int v = GetLocalIndex(startX, y);
-            shuffledX.FYSubShuffle(v, endX - startX, ref ChunkRNG);
+            int v = GetCellIndex(in startX, in y);
+            shuffledX.FYSubShuffle(v, endX - startX, ref chunkRNG);
         }
     }
     #region Multithreaded
 #if !USE_SHUFFLE_X
     bool flip = true;
 #endif
+    private void ResetMovedWithFrame()
+    {
+#if USE_DOUBLE_MWF_BUFFER
+        if (frameFlip)
+        {
+            for (int i = 0; i < indexSize; i++)
+            {
+                movedWithFrame1[i] = false;
+            }
+        }
+        else
+        {
+            for (int i = 0; i < indexSize; i++)
+            {
+                movedWithFrame2[i] = false;
+            }
+        }
+#else
+        for (int i = 0; i < indexSize; i++)
+        {
+            movedWithFrame[i] = false;
+        }
+#endif
+    }
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public bool MovedWithFrame(int index)
+    {
+#if USE_DOUBLE_MWF_BUFFER
+        if (frameFlip)
+            return movedWithFrame2[index];
+        else
+            return movedWithFrame1[index];
+#else
+        return movedWithFrame[index];
+#endif
+    }
+
     public void MultithreadSetup(SandWorld matrix)
     {
+        gravity = matrix.gravity;
+#if USE_DOUBLE_MWF_BUFFER
+        movedWithFrameReset?.Wait();
+        frameFlip = !frameFlip;
+        movedWithFrameReset = new Task(ResetMovedWithFrame);
+        movedWithFrameReset.Start();
+#else
+        ResetMovedWithFrame();
+#endif
 
 #if !USE_SHUFFLE_X
         flip = !flip;
@@ -98,7 +189,7 @@ public class WorldChunk
         int finX = Rubedo.Lib.Math.Clamp(dirtyRect.Right, chunkX, chunkX + size);
         int dirtyY = Rubedo.Lib.Math.Clamp(dirtyRect.Y, chunkY, chunkY + size);
         int finY = Rubedo.Lib.Math.Clamp(dirtyRect.Bottom, chunkY, chunkY + size);
-        
+
         ShuffleXIndices(dirtyX, finX, dirtyY, finY);
 #endif
         for (int y = -1; y <= 1; y++)
@@ -124,6 +215,9 @@ public class WorldChunk
     }
     public void MultithreadStep(SandWorld matrix, int step)
     {
+        if (dirtyRect.IsEmpty)
+            return;
+
         int dirtyX = Rubedo.Lib.Math.Clamp(dirtyRect.X, chunkX, chunkX + size);
         int finX = Rubedo.Lib.Math.Clamp(dirtyRect.Right, chunkX, chunkX + size);
         int dirtyY = Rubedo.Lib.Math.Clamp(dirtyRect.Y, chunkY, chunkY + size);
@@ -131,18 +225,39 @@ public class WorldChunk
 
 #if USE_SHUFFLE_X
 
+        var localElementArray = this.element;
+        var localShuffledX = this.shuffledX; // if used repeatedly
+        var localMovedWithFrame = this.movedWithFrame; // adapt for your compilation flags
+        var localTypeLookup = ElementManager.typeLookup;
+
         for (int y = dirtyY; y < finY; y++)
         {
+            int yIndex = (y - chunkY) * size;
             for (int x = dirtyX; x < finX; x++)
             {
-                int i = shuffledX[GetLocalIndex(x, y)];
-                if (!region.GetMovedWithFrame(i))
+                int cellID = yIndex + (x - chunkX);
+                int x1 = x;//localShuffledX[i];
+                //i = yIndex + (x1 - chunkX);
+                bool moved = localMovedWithFrame[cellID];
+                if (!moved)
                 {
-                    Cell cell = region.GetCell(i);
-                    Element element = cell.element;
-                    if (!cell.IsEmpty())
+                    int elementID = localElementArray[cellID];
+                    if (elementID == ElementManager.EMPTY)
+                        continue;
+
+                    ElementManager.Type elementType = localTypeLookup[elementID];
+                    switch (elementType)
                     {
-                        element.Step(this, cell);
+                        case ElementManager.Type.LIQUID:
+                            ElementBehaviour.StepLiquid(this, x1, y, cellID, elementID);
+                            break;
+                        case ElementManager.Type.GAS:
+                            ElementBehaviour.StepGas(this, x1, y, cellID);
+                            break;
+                        case ElementManager.Type.PHYSICS_SOLID:
+                            break;
+                        case ElementManager.Type.EMPTY:
+                            break;
                     }
                 }
             }
@@ -154,14 +269,25 @@ public class WorldChunk
             {
                 for (int x = finX - 1; x >= dirtyX; x--)
                 {
-                    int i = GetIndex(x, y);
-                    if (!region.GetMovedWithFrame(i))
+                    int x1 = shuffledX[y - chunkY, x - chunkX];
+                    int i = GetIndex(x1, y);
+                    if (!MovedWithFrame(i))
                     {
-                        Cell cell = region.GetCell(i);
-                        Element element = cell.element;
-                        if (!cell.IsEmpty())
+                        int cellID = GetCell(i);
+                        int element = cellData.element[cellID];
+                        if (element != ElementManager.EMPTY)
                         {
-                            element.Step(this, cell);
+                            switch (ElementManager.typeLookup[element])
+                            {
+                                case ElementManager.Type.PHYSICS_SOLID:
+                                    break;
+                                case ElementManager.Type.LIQUID:
+                                    ElementBehaviour.StepLiquid(this, x1, y, cellID);
+                                    break;
+                                case ElementManager.Type.GAS:
+                                    ElementBehaviour.StepGas(this, x1, y, cellID);
+                                    break;
+                            }
                         }
                     }
                 }
@@ -169,18 +295,29 @@ public class WorldChunk
         }
         else
         {
-            for (int y = finY - 1; y >= dirtyY; y--)
+            for (int y = dirtyY; y < finY; y++)
             {
                 for (int x = dirtyX; x < finX; x++)
                 {
-                    int i = GetIndex(x, y);
-                    if (!region.GetMovedWithFrame(i))
+                    int x1 = shuffledX[y - chunkY, x - chunkX];
+                    int i = GetIndex(x1, y);
+                    if (!MovedWithFrame(i))
                     {
-                        Cell cell = region.GetCell(i);
-                        Element element = cell.element;
-                        if (!cell.IsEmpty())
+                        int cellID = GetCell(i);
+                        int element = cellData.element[cellID];
+                        if (element != ElementManager.EMPTY)
                         {
-                            element.Step(this, cell);
+                            switch (ElementManager.typeLookup[element])
+                            {
+                                case ElementManager.Type.PHYSICS_SOLID:
+                                    break;
+                                case ElementManager.Type.LIQUID:
+                                    ElementBehaviour.StepLiquid(this, x1, y, cellID);
+                                    break;
+                                case ElementManager.Type.GAS:
+                                    ElementBehaviour.StepGas(this, x1, y, cellID);
+                                    break;
+                            }
                         }
                     }
                 }
@@ -199,15 +336,15 @@ public class WorldChunk
         {
             for (int x = chunkX; x < chunkX + size; x++)
             {
-                int i = GetIndex(x, y);
-                if (region.dirtyRectStep[i])
+                int i = GetCellIndex(in x, in y);
+                if (dirtyRectStep[i])
                 {
                     minX = minX == int.MaxValue ? x : System.Math.Min(minX, x);
                     minY = minY == int.MaxValue ? y : System.Math.Min(minY, y);
                     maxX = maxX == int.MinValue ? x : System.Math.Max(maxX, x);
                     maxY = maxY == int.MinValue ? y : System.Math.Max(maxY, y);
                 }
-                region.dirtyRectStep[i] = false;
+                dirtyRectStep[i] = false;
             }
         }
 
@@ -252,92 +389,138 @@ public class WorldChunk
 
         prevDirtyRect = dirtyRect;
     }
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public int GetLocalIndex(int x, int y)
+    public void SetMovedWithFrame(in int x, in int y)
     {
-        return (x - this.chunkX) + (y - chunkY) * size;
+        int i = GetCellIndex(in x, in y);
+        SetMovedWithFrame(i);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public void ThreadEnvelop(int x, int y)
+    public void SetMovedWithFrame(in int index)
     {
-        int i = GetIndex(x, y);
-        region.dirtyRectStep[i] = true;
-    }
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public void ThreadEnvelop(int index)
-    {
-        region.dirtyRectStep[index] = true;
-    }
-
-    public void SetCell(Cell cell, int x, int y)
-    {
-        const int PADDING = 1;
-
-        WorldChunk chunk;
-        if (InBounds(x, y))
+#if USE_DOUBLE_MWF_BUFFER
+        if (frameFlip)
         {
-            chunk = this;
+            movedWithFrame2[index] = true;
         }
         else
         {
-            chunk = GetMultiChunk(x, y);
+            movedWithFrame1[index] = true;
         }
-
-        cell.x = x;
-        cell.y = y;
-
-        int index = chunk.GetIndex(x, y);
-        chunk.SetCell(cell, index);
-        chunk.ThreadEnvelop(index);
-
-        if (x - PADDING < chunk.chunkX)
-        {
-            if (y - PADDING < chunk.chunkY)
-                chunk.multithreadChunkRef[0]?.ThreadEnvelop(x - PADDING, y - PADDING);
-            else if (y +  PADDING >= chunk.chunkY + chunk.size)
-                chunk.multithreadChunkRef[6]?.ThreadEnvelop(x - PADDING, y + PADDING);
-            else
-                chunk.multithreadChunkRef[3]?.ThreadEnvelop(x - PADDING, y);
-        }
-        else if (x + PADDING >= chunk.chunkX + chunk.size)
-        {
-            if (y - PADDING < chunk.chunkY)
-                chunk.multithreadChunkRef[2]?.ThreadEnvelop(x + PADDING, y - PADDING);
-            else if (y + PADDING >= chunk.chunkY + chunk.size)
-                chunk.multithreadChunkRef[8]?.ThreadEnvelop(x + PADDING, y + PADDING);
-            else
-                chunk.multithreadChunkRef[5]?.ThreadEnvelop(x + PADDING, y);
-        }
-        else
-        {
-            if (y - PADDING < chunk.chunkY)
-                chunk.multithreadChunkRef[1]?.ThreadEnvelop(x, y - PADDING);
-            else if (y + PADDING >= chunk.chunkY + chunk.size)
-                chunk.multithreadChunkRef[7]?.ThreadEnvelop(x, y + PADDING);
-        }
-    }
-
-    public bool TryGetCell(int x, int y, out Cell cell)
-    {
-        cell = null;
-
-        if (InBounds(x, y))
-        {
-            cell = GetCell(x, y);
-        }
-        else if (InMultiBounds(x, y))
-        {
-            WorldChunk chunk = GetMultiChunk(x, y);
-            if (chunk != null)
-                cell = chunk.GetCell(x, y);
-        }
-        return cell != null;
+#else
+        movedWithFrame[index] = true;
+#endif
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public WorldChunk GetMultiChunk(int x, int y)
+    public void ThreadEnvelop(in int x, in int y)
+    {
+        int i = GetCellIndex(in x, in y);
+        dirtyRectStep[i] = true;
+    }
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void ThreadEnvelop(in int index)
+    {
+        dirtyRectStep[index] = true;
+    }
+
+    /// <summary>
+    /// Swaps the indices of the two cells. Should only be called for intrachunk swaps.
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void SwapCells(in int x1, in int y1, in int actorID, in int x2, in int y2, in int targetID)
+    {
+        Swap(in actorID, in targetID);
+
+        int localX1 = x1 - chunkX;
+        int localX2 = x2 - chunkX;
+        int localY1 = y1 - chunkY;
+        int localY2 = y2 - chunkY;
+
+        ThreadEnvelop(actorID);
+        ThreadEnvelop(targetID);
+        Pad(localX1, localY1);
+        Pad(localX2, localY2);
+    }
+
+    public void Swap(in int actor, in int target)
+    {
+        (element[actor], element[target]) = (element[target], element[actor]);
+        (velocity[actor], velocity[target]) = (velocity[target], velocity[actor]);
+        (moving[actor], moving[target]) = (moving[target], moving[actor]);
+        (color[actor], color[target]) = (color[target], color[actor]);
+    }
+
+
+    /// <summary>
+    /// Swaps two cells around between two chunks.
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void Swap(in WorldChunk other, int ours, int theirs)
+    {
+        (element[ours], other.element[theirs]) = (other.element[theirs], element[ours]);
+        (velocity[ours], other.velocity[theirs]) = (other.velocity[theirs], velocity[ours]);
+        (moving[ours], other.moving[theirs]) = (other.moving[theirs], moving[ours]);
+        (color[ours], other.color[theirs]) = (other.color[theirs], color[ours]);
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void Pad(in int localX, in int localY)
+    {
+        //determine which chunk edge we're on.
+        int xDir = 1;
+        if (localX == 0)
+            xDir = 0;
+        else if (localX == size - 1)
+            xDir = 2;
+
+        int yDir = 1;
+        if (localY == 0)
+            yDir = 0;
+        else if (localY == size - 1)
+            yDir = 2;
+
+        if (yDir == 1 && xDir == 1)
+        {
+            return;
+        }
+
+        int chunkIndex = (yDir * 3) + xDir;
+        multithreadChunkRef[chunkIndex]?.ThreadEnvelop(localX + chunkX + xDir - 1, localY + chunkY + yDir - 1);
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public int GetCellIndex(in int x, in int y)
+    {
+        return ((y - chunkY) * size) + (x - chunkX);
+    }
+
+    public bool TryGetCell(in int x, in int y, out WorldChunk containing, out int cellID)
+    {
+        if (InBounds(x, y))
+        {
+            containing = this;
+            cellID = GetCellIndex(in x, in y);
+            return true;
+        }
+        else if (InMultiBounds(in x, in y))
+        {
+            containing = GetMultiChunk(in x, in y);
+            bool exists = containing != null;
+            if (exists)
+                cellID = containing.GetCellIndex(in x, in y);
+            else
+                cellID = -1;
+            return exists;
+        }
+
+        containing = null;
+        cellID = -1;
+        return false;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public WorldChunk GetMultiChunk(in int x, in int y)
     {
         int xSec = ((x - chunkX + size) >> halfSizeShift) - 1; //range 0-3
         xSec = (xSec + 1) >> 1; //mapping 0 -> 0, 1,2 -> 1, 3 -> 2
@@ -350,7 +533,7 @@ public class WorldChunk
     /// Returns true if the requested coordinate is within the half-size ring area around the chunk for multithreading.
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public bool OnlyMultiBounds(int x, int y)
+    public bool OnlyMultiBounds(in int x, in int y)
     {   
         // Precompute boundaries
         int left = chunkX;
@@ -370,48 +553,69 @@ public class WorldChunk
             (x < left || x >= right || y < top || y >= bottom);
     }
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public bool InMultiBounds(int x, int y)
+    public bool InMultiBounds(in int x, in int y)
     {
-        return x >= this.chunkX - halfSize && x < this.chunkX + size + halfSize
+        return x >= chunkX - halfSize && x < chunkX + size + halfSize
             && y >= chunkY - halfSize && y < chunkY + size + halfSize;
     }
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public bool InBounds(int x, int y)
+    public bool InBounds(in int x, in int y)
     {
-        return x >= this.chunkX && x < this.chunkX + size
+        return x >= chunkX && x < chunkX + size
             && y >= chunkY && y < chunkY + size;
     }
 
-    public void SetFreeFalling(WorldChunk caller, int x, int y)
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void SetMovingFaster(ref readonly int cellID, ref readonly ElementManager.Type elementType, ref readonly byte inertialRes)
     {
-        if (TryGetCell(x, y, out Cell cell))
+        ref Moving moving = ref this.moving[cellID];
+        if (moving.isMoving)
+            return;
+
+        if (inertialRes < chunkRNG.Percent())
         {
-            if (!cell.IsEmpty() && cell.element.elementType == Element.Type.LIQUID)
+            moving.isMoving = true;
+            moving.movingCount = 0;
+        }
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void SetMoving(in int cellID, in int elementID)
+    {
+        if (elementID == ElementManager.EMPTY)
+            return;
+
+        ref Moving moving = ref this.moving[cellID];
+        if (moving.isMoving || ElementManager.typeLookup[elementID] != ElementManager.Type.LIQUID)
+            return;
+
+        if (ElementManager.liquid_inertialResistance[elementID] < chunkRNG.Percent())
+        {
+            moving.isMoving = true;
+            moving.movingCount = 0; //naughty naughty, mutating a struct...
+        }
+    }
+    public void SetMovingPos(int x, int y)
+    {
+        if (InBounds(x, y))
+        {
+            int cell = GetCellIndex(in x, in y);
+            int elementID = this.element[cell];
+            SetMoving(cell, elementID);
+        }
+        else
+        {
+            WorldChunk chunk = GetMultiChunk(in x, in y);
+            if (chunk != null)
             {
-                cell.SetFreeFalling(cell.freeFalling || cell.element.liquid_inertialResistance < caller.ChunkRNG.Percent());
+                int cell = chunk.GetCellIndex(in x, in y);
+                int elementID = chunk.element[cell];
+                chunk.SetMoving(cell, elementID);
             }
         }
     }
 
 #endregion
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public void SetCell(Cell cell, int index)
-    {
-        region.cells[index] = cell;
-        region.SetMovedWithFrame(index);
-    }
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public Cell GetCell(int x, int y)
-    {
-        return region.GetCell(x, y);
-    }
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public int GetIndex(int x, int y)
-    {
-        return region.GetIndex(x, y);
-    }
 
     public bool Draw(WorldRegion region, Camera camera, ref Color[] buffer)
     {
@@ -428,27 +632,27 @@ public class WorldChunk
             {
                 for (int x = dirtyX; x < finX; x++)
                 {
-                    int i = GetIndex(x, y);
-                    Cell cell = region.GetCell(i);
+                    int draw = region.GetDrawIndex(x, y);
+                    int cellID = GetCellIndex(in x, in y);
 
                     if (parentMatrix.drawMoveOverride)
                     {
-                        if (cell.IsEmpty())
+                        if (this.element[cellID] == 0)
                         {
-                            buffer[i] = Color.Transparent;
+                            buffer[draw] = Color.Transparent;
                         }
-                        else if (!region.GetMovedWithFrame(i))
+                        else if (!MovedWithFrame(cellID))
                         {
-                            buffer[i] = Color.Red;
+                            buffer[draw] = Color.Red;
                         }
                         else
                         {
-                            buffer[i] = Color.Green;
+                            buffer[draw] = Color.Green;
                         }
                     }
                     else
                     {
-                        buffer[i] = cell.color;
+                        buffer[draw] = this.color[cellID];
                     }
                 }
             }
@@ -457,5 +661,11 @@ public class WorldChunk
             return true;
         }
         return false;
+    }
+
+    public struct Moving
+    {
+        public bool isMoving;
+        public byte movingCount;
     }
 }

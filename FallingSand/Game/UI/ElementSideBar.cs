@@ -24,13 +24,13 @@ public class ElementSideBar
         vertical.SetAnchorAndOffset(Anchor.TopRight, new Vector2(5, 5));
         vertical.childPadding = 5;
 
-        Element element1 = null;
-        foreach (Element element in ElementManager.elementsByName.Values)
+        int element1 = ElementManager.EMPTY;
+        foreach (int element in ElementManager.elementsByName.Values)
         {
-            if (state.selectedElement == null)
+            if (state.selectedElement == ElementManager.EMPTY)
                 state.selectedElement = element;
 
-            if (element1 == null)
+            if (element1 == ElementManager.EMPTY)
             {
                 element1 = element;
                 continue;
@@ -42,10 +42,10 @@ public class ElementSideBar
                 CreateElementButton(horizontal, element1, state);
                 CreateElementButton(horizontal, element, state);
                 vertical.AddChild(horizontal);
-                element1 = null;
+                element1 = ElementManager.EMPTY;
             }
         }
-        if (element1 != null)
+        if (element1 != ElementManager.EMPTY)
         {
             Horizontal horizontal = new Horizontal();
             CreateElementButton(horizontal, element1, state);
@@ -55,7 +55,7 @@ public class ElementSideBar
         GUI.Root.AddChild(vertical);
     }
 
-    private void CreateElementButton(Horizontal horz, Element element, WorldState state)
+    private void CreateElementButton(Horizontal horz, int element, WorldState state)
     {
         Panel panel = new Panel(32, 48);
         Button button = new Button();
@@ -75,12 +75,12 @@ public class ElementSideBar
             state.leftClickCondition.Consume();
         };
 
-        Image image = Image.CreateSolidColorImage(32, 32, element.color);
+        Image image = Image.CreateSolidColorImage(32, 32, ElementManager.color[element]);
         button.AddChild(image);
         //button.AddChild(new SelectableTintSet(image, 1f));
 
         FontSystem font = Assets.GetFont("fs-default");
-        Label text = new Label(font, element.internalName, Color.White, 12);
+        Label text = new Label(font, ElementManager.internalName[element], Color.White, 12);
         text.MaxSize = new Vector2(64, -1);
         text.Anchor = Anchor.BottomLeft;
         text.Offset = new Vector2(0, 4);

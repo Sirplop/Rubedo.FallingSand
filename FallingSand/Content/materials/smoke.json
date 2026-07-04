@@ -8,8 +8,8 @@
 		"liquid_isSand": true,
 		"liquid_maxSpeed": 5,
 		"liquid_gravity": 1,
-		"liquid_inertialResistance": -1,
-		"liquid_friction": 0.0,
+		"liquid_inertialResistance": 0,
+		"liquid_friction": 0,
 	},
 	{
 		"parent": "smoke",

@@ -14,11 +14,10 @@ namespace FallingSand.Game.Elements;
 /// </summary>
 public static class ElementLoader
 {
-    private static int element_id = 1;
-
-    public static Element[] PopulateElements(List<ProtoElement> elements)
+    public static List<FinishedElement> PopulateElements(List<ProtoElement> elements)
     {
-        List<Element> result = new List<Element>();
+        List<FinishedElement> result = new List<FinishedElement>();
+        result.Add(null); //represents empty space
 
         //create a dictionary for quick lookup.
         Dictionary<string, ProtoElement> nameToElement = new Dictionary<string, ProtoElement>();
@@ -78,11 +77,9 @@ public static class ElementLoader
             removeFromWorking.Clear();
         }
 
-        Element[] res = result.ToArray();
-
         //TODO: Reactions
 
-        return res;
+        return result;
     }
 
     public static List<ProtoElement> LoadProtoElements(string[] paths)
@@ -140,9 +137,9 @@ public static class ElementLoader
             {
                 element.elementType = cellType.ToLower() switch
                 {
-                    "liquid" => Element.Type.LIQUID,
-                    "gas" => Element.Type.GAS,
-                    "solid" => Element.Type.PHYSICS_SOLID,
+                    "liquid" => ElementManager.Type.LIQUID,
+                    "gas" => ElementManager.Type.GAS,
+                    "solid" => ElementManager.Type.PHYSICS_SOLID,
                     _ => throw new ContentLoadException($"Element file '{path}', element '{element.internalName}', has a malformed cell type!"),
                 };
                 element.def_elementType = true;
@@ -183,33 +180,31 @@ public static class ElementLoader
                 element.liquid_isStatic = isStatic;
                 element.def_liquid_isStatic = true;
             }
-            if (CheckValue(jsonObj, "liquid_maxSpeed", out int maxSpeed))
+            if (CheckValue(jsonObj, "liquid_maxSpeed", out byte maxSpeed))
             {
                 element.liquid_maxSpeed = maxSpeed;
                 element.def_liquid_maxSpeed = true;
             }
-            if (CheckValue(jsonObj, "liquid_gravity", out float gravity))
+            if (CheckValue(jsonObj, "liquid_gravity", out byte gravity))
             {
                 element.liquid_gravity = gravity;
                 element.def_liquid_gravity = true;
             }
-            if (CheckValue(jsonObj, "liquid_dispersion", out int dispersion))
+            if (CheckValue(jsonObj, "liquid_dispersion", out byte dispersion))
             {
                 element.liquid_dispersion = dispersion;
                 element.def_liquid_dispersion = true;
             }
-            if (CheckValue(jsonObj, "liquid_inertialResistance", out int inertialResistance))
+            if (CheckValue(jsonObj, "liquid_inertialResistance", out byte inertialResistance))
             {
                 element.liquid_inertialResistance = inertialResistance;
                 element.def_liquid_inertialResistance = true;
             }
-            if (CheckValue(jsonObj, "liquid_friction", out float friction))
+            if (CheckValue(jsonObj, "liquid_friction", out byte friction))
             {
                 element.liquid_friction = friction;
                 element.def_liquid_friction = true;
             }
-
-            element.element_id = element_id++;
 
             elements[i++] = element;
         }
@@ -236,125 +231,6 @@ public static class ElementLoader
         {
             value = default;
             return false;
-        }
-    }
-
-    public class ProtoElement : Element
-    {
-        public string parent;
-        public bool inheritReactions = false;
-
-        public bool finishedConstruction = false;
-
-        public Dictionary<ReactionKey, Reaction> reactions;
-
-        public bool def_parent = false;
-        public bool def_inheritReactions = false;
-        public bool def_tags = false;
-        public bool def_elementType = false;
-        public bool def_density = false;
-
-        public bool def_liquid_isStatic = false;
-        public bool def_liquid_isSand = false;
-
-        public bool def_liquid_maxSpeed = false;
-        public bool def_liquid_gravity = false;
-        public bool def_liquid_dispersion = false;
-        public bool def_liquid_inertialResistance = false;
-        public bool def_liquid_friction = false;
-
-        public ProtoElement()
-        {
-            reactions = new Dictionary<ReactionKey, Reaction>();
-        }
-
-        public Element Finish()
-        {
-            Element element = elementType switch
-            {
-                Element.Type.LIQUID => new Liquid(internalName),
-                Element.Type.GAS => new Gas(internalName),
-                Element.Type.PHYSICS_SOLID => new Solid(internalName),
-                _ => throw new System.NotImplementedException(),
-            };
-
-            element.tags = tags;
-            element.color = color;
-            element.density = density;
-            element.liquid_isStatic = liquid_isStatic;
-            element.liquid_isSand = liquid_isSand;
-            element.liquid_maxSpeed = liquid_maxSpeed;
-            element.liquid_gravity = liquid_gravity;
-            element.liquid_dispersion = liquid_dispersion;
-            element.liquid_inertialResistance = liquid_inertialResistance;
-            element.liquid_friction = liquid_friction;
-
-            element.element_id = this.element_id;
-            finishedConstruction = true;
-
-            return element;
-        }
-
-        public Element Finish(ProtoElement parentElement)
-        {
-            Element.Type type = def_elementType ? elementType : parentElement.elementType;
-
-            Element element = type switch
-            {
-                Element.Type.LIQUID => new Liquid(internalName),
-                Element.Type.GAS => new Gas(internalName),
-                Element.Type.PHYSICS_SOLID => new Solid(internalName),
-                _ => throw new System.NotImplementedException(),
-            };
-
-            int tagCount = 0;
-            if (def_tags)
-            {
-                tagCount += tags.Length;
-            }
-            if (parentElement.def_tags)
-            {
-                tagCount += parentElement.tags.Length;
-            }
-
-            element.tags = new string[tagCount];
-            int i = 0;
-            if (def_tags)
-            {
-                for (int x = 0; x < tags.Length; x++)
-                {
-                    element.tags[i++] = tags[x];
-                }
-            }
-            if (parentElement.def_tags)
-            {
-                for (int x = 0; x < parentElement.tags.Length; x++)
-                {
-                    element.tags[i++] = parentElement.tags[x];
-                }
-            }
-
-            element.color = color;
-
-            element.density = def_density ? density : parentElement.density; ;
-            element.liquid_isStatic = def_liquid_isStatic ? liquid_isStatic : parentElement.liquid_isStatic;
-            element.liquid_isSand = def_liquid_isSand ? liquid_isSand : parentElement.liquid_isSand;
-            element.liquid_maxSpeed = def_liquid_maxSpeed ? liquid_maxSpeed : parentElement.liquid_maxSpeed;
-            element.liquid_gravity = def_liquid_gravity ? liquid_gravity : parentElement.liquid_gravity;
-            element.liquid_dispersion = def_liquid_dispersion ? liquid_dispersion : parentElement.liquid_dispersion;
-            element.liquid_inertialResistance = def_liquid_inertialResistance ? liquid_inertialResistance : parentElement.liquid_inertialResistance;
-            element.liquid_friction = def_liquid_friction ? liquid_friction : parentElement.liquid_friction;
-
-            element.element_id = this.element_id;
-            finishedConstruction = true;
-
-            return element;
-        }
-
-        //should not be doing anything with ProtoElement, it is just data blocks
-        public override void Step(WorldChunk caller, Cell cell)
-        {
-            throw new System.NotImplementedException();
         }
     }
 }

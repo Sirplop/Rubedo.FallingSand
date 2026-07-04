@@ -44,15 +44,19 @@ public class WorldState : GameState
     private readonly KeyCondition cameraReset = new KeyCondition(Keys.R);
     private readonly KeyCondition pauseSim = new KeyCondition(Keys.P);
     private readonly KeyCondition stepSim = new KeyCondition(Keys.O);
+    private readonly AllCondition spawnCheckerboard = new AllCondition(new KeyCondition(Keys.Z), new NotCondition(new KeyCondition(Keys.LeftShift, true)));
+    private readonly AllCondition spawnRandomCheckerboard = new AllCondition(new KeyCondition(Keys.Z), new KeyCondition(Keys.LeftShift, true));
     private readonly KeyCondition toggleCells = new KeyCondition(Keys.C);
     private readonly KeyCondition toggleRects = new KeyCondition(Keys.V);
     private readonly KeyCondition togglePosition = new KeyCondition(Keys.B);
     private readonly KeyCondition toggleCellDetails = new KeyCondition(Keys.N);
     private readonly KeyCondition toggleDrawOverride = new KeyCondition(Keys.X);
+    private readonly KeyCondition toggleVSync = new KeyCondition(Keys.F1);
+    private readonly KeyCondition toggleTPSCap = new KeyCondition(Keys.F2);
 
     private Shapes shapes;
 
-    public Element selectedElement;
+    public int selectedElement;
 
     public Vertical debugRoot;
     public Vertical mouseVertical;
@@ -74,6 +78,7 @@ public class WorldState : GameState
     {
         ElementManager.Initialize();
         ElementManager.LoadElements("materials");
+        ElementManager.FinishInitialize();
 
         Time.SetFixedDeltaTime(1f / 50f);
         Assets.CreateNewFontSystem("fs-default", "DroidSans.ttf", "DroidSansJapanese.ttf", "Symbola-Emoji.ttf");
@@ -103,7 +108,7 @@ public class WorldState : GameState
         ElementSideBar bar = new ElementSideBar(this);
 
         AddDebugLabel(debugRoot, () => string.Format("{0:0.0} ms ({1:0.} fps)", deltaTime * 1000.0f, 1.0f / deltaTime));
-        AddDebugLabel(debugRoot, () => $"Selected Material: {selectedElement.internalName}");
+        AddDebugLabel(debugRoot, () => $"Selected Material: {ElementManager.internalName[selectedElement]}");
         CreateMouseDebugGUI();
     }
 
@@ -146,7 +151,7 @@ public class WorldState : GameState
             {
                 foreach (WorldChunk chunk in region.chunks)
                 {
-                    shapes.DrawBox(chunk.chunkX, chunk.chunkY, chunk.size, chunk.size, Color.DarkGray, 0.5f);
+                    shapes.DrawBox(chunk.chunkX, chunk.chunkY, chunk.size, chunk.size, Color.DarkGray, 0.5f / MainCamera.Scale.X);
                 }
             }
         }
@@ -157,7 +162,7 @@ public class WorldState : GameState
                 foreach (WorldChunk chunk in region.chunks)
                 {
                     if (chunk.DirtyRect.Height != 0 && chunk.DirtyRect.Width != 0)
-                    shapes.DrawBox(chunk.DirtyRect, Color.Red, 0.5f);
+                        shapes.DrawBox(chunk.DirtyRect, Color.Red, 0.5f / MainCamera.Scale.X);
                 }
             }
         }
@@ -168,33 +173,38 @@ public class WorldState : GameState
             Vector2 mouse = InputManager.MouseWorldPosition(MainCamera);
             int x = Rubedo.Lib.Math.FloorToInt(mouse.X);
             int y = Rubedo.Lib.Math.FloorToInt(mouse.Y);
-            Cell cell = this.world.GetCell(x, y);
+            WorldChunk chunk = this.world.GetChunk(x, y);
             string material = "???";
-            if (cell != null)
+            int cellID = -1;
+            int elementID = ElementManager.EMPTY;
+            if (chunk != null)
             {
-                if (cell.IsEmpty())
+                cellID = chunk.GetCellIndex(in x, in y);
+                elementID = chunk.element[cellID];
+            }
+
+            if (cellID != -1)
+            {
+                if (cellID == ElementManager.EMPTY)
                     material = "air";
                 else
-                    material = cell.element.internalName;
+                    material = ElementManager.internalName[elementID];
             }
 
             Vector2 mouseScreen = InputManager.MouseScreenPosition(MainCamera);
-            mouse = new Vector2(MathF.Ceiling(mouse.X), MathF.Ceiling(mouse.Y));
+            mouse = new Vector2(MathF.Floor(mouse.X), MathF.Floor(mouse.Y));
             mouseVertical.Offset = GUI.Root.ScreenToUI(mouseScreen + new Vector2(15, 0));
 
             Label world = mouseVertical.Children[0] as Label;
             world.Text = material + " - "+mouse.ToNiceString("0");
 
-            if (drawCellDetails && cell != null && !cell.IsEmpty())
+            if (drawCellDetails && elementID != ElementManager.EMPTY)
             {
-                world.Text += $"\nCell Pos: {cell.x}, {cell.y}" +
-                    $"\nVelocity: {cell.xVel}, {cell.yVel}" +
-                    $"\nFreefalling: {cell.freeFalling}, {cell.freeFallingCount}" +
-                    $"\nLast Frame: {cell.lastFrame}";
-            }
-            else if (drawCellDetails && cell != null)
-            {
-                world.Text += $"\nCell Pos: {cell.x}, {cell.y}";
+                Vector2 velocity = chunk.velocity[cellID];
+                WorldChunk.Moving moving = chunk.moving[cellID];
+
+                world.Text += $"\nVelocity: {velocity.ToNiceString("0.00")}" +
+                    $"\nFreefalling: {moving.isMoving}, {moving.movingCount}";
             }
         }
     }
@@ -208,8 +218,8 @@ public class WorldState : GameState
             brushSize = Rubedo.Lib.Math.Clamp(brushSize + scroll, 0, 16);
         }
 
-        SpawnCell(leftClickCondition.Pressed(), leftClickCondition.Held(), selectedElement, selectedElement.liquid_isStatic ? 100 : 35);
-        SpawnCell(shiftLeftClickCondition.Pressed(), shiftLeftClickCondition.Held(), null, 101);
+        SpawnCell(leftClickCondition.Pressed(), leftClickCondition.Held(), selectedElement, ElementManager.liquid_isStatic[selectedElement] ? 100 : 35);
+        SpawnCell(shiftLeftClickCondition.Pressed(), shiftLeftClickCondition.Held(), ElementManager.EMPTY, 101);
 
         if (middleClickCondition.Pressed())
         {
@@ -221,22 +231,25 @@ public class WorldState : GameState
             Add(entity);
         }
 
+        float rotateRate = 0.5f * Time.DeltaTime;
+        float moveRate = 50 * Time.DeltaTime / MainCamera.Scale.X;
+
         if (cameraLeft.Pressed() || cameraLeft.Held())
-            MainCamera.XY += new Vector2(-1, 0);
+            MainCamera.XY += new Vector2(-moveRate, 0);
         if (cameraRight.Pressed() || cameraRight.Held())
-            MainCamera.XY += new Vector2(1, 0);
+            MainCamera.XY += new Vector2(moveRate, 0);
         if (cameraUp.Pressed() || cameraUp.Held())
-            MainCamera.XY += new Vector2(0, 1);
+            MainCamera.XY += new Vector2(0, moveRate);
         if (cameraDown.Pressed() || cameraDown.Held())
-            MainCamera.XY += new Vector2(0, -1);
+            MainCamera.XY += new Vector2(0, -moveRate);
         if (cameraRotateCW.Pressed() || cameraRotateCW.Held())
-            MainCamera.Rotation += 0.01f;
+            MainCamera.Rotation += rotateRate;
         if (cameraRotateCCW.Pressed() || cameraRotateCCW.Held())
-            MainCamera.Rotation -= 0.01f;
+            MainCamera.Rotation -= rotateRate;
         if (cameraScaleDown.Pressed() || cameraScaleDown.Held())
-            MainCamera.Scale -= new Vector2(0.01f, 0.01f);
+            MainCamera.Scale -= new Vector2(rotateRate, rotateRate);
         if (cameraScaleUp.Pressed() || cameraScaleUp.Held())
-            MainCamera.Scale += new Vector2(0.01f, 0.01f);
+            MainCamera.Scale += new Vector2(rotateRate, rotateRate);
         if (cameraReset.Pressed())
         {
             MainCamera.XY = Vector2.Zero;
@@ -274,9 +287,28 @@ public class WorldState : GameState
             drawMoveOverride = !drawMoveOverride;
             world.drawMoveOverride = drawMoveOverride;
         }
+        if (toggleVSync.Pressed())
+        {
+            RubedoEngine.Graphics.SynchronizeWithVerticalRetrace = !RubedoEngine.Graphics.SynchronizeWithVerticalRetrace; //vsync
+            RubedoEngine.Graphics.ApplyChanges();
+        }
+        if (toggleTPSCap.Pressed())
+        {
+            world.uncapUpdates = !world.uncapUpdates;
+        }
+
+        if (spawnCheckerboard.Pressed())
+        {
+            SpawnCheckerboard(false);
+        }
+
+        if (spawnRandomCheckerboard.Pressed())
+        {
+            SpawnCheckerboard(true);
+        }
     }
 
-    private void SpawnCell(bool pressed, bool held, Element type, int chance)
+    private void SpawnCell(bool pressed, bool held, int type, int chance)
     {
         if (held || pressed)
         {
@@ -294,11 +326,11 @@ public class WorldState : GameState
         }
     }
 
-    private void SpawnCellRun(int m_x, int m_y, Element type, int chance, int brushSize)
+    private void SpawnCellRun(int m_x, int m_y, int type, int chance, int brushSize)
     {
         if (brushSize == 0)
         {
-            if (type == null)
+            if (type == ElementManager.EMPTY)
                 world.ClearCell(m_x, m_y);
             else
                 world.SpawnCell(type, m_x, m_y);
@@ -310,10 +342,38 @@ public class WorldState : GameState
             {
                 if (Rubedo.Lib.Random.Percent < chance)
                 {
-                    if (type == null)
+                    if (type == ElementManager.EMPTY)
                         world.ClearCell(m_x + x, m_y + y);
                     else
                         world.SpawnCell(type, m_x + x, m_y + y);
+                }
+            }
+        }
+    }
+
+    public void SpawnCheckerboard(bool random)
+    {
+        int[] elements = new int[ElementManager.elementsByName.Values.Count];
+        int b = 0;
+        foreach(int el in ElementManager.elementsByName.Values)
+        {
+            elements[b++] = el;
+        }
+        int size = world.chunksPerRegion;
+        for (int i = 0; i < world.regions.Count; i++)
+        {
+            WorldRegion region = world.regions[i];
+            int xStart = 0;
+            for (int y = 0; y < size; y++)
+            {
+                xStart = (xStart == 1 ? 0 : 1);
+                for (int x = xStart; x < size; x+=2)
+                {
+                    WorldChunk chunk = region.GetChunk(region.RegionX + (x * world.chunkSize), region.RegionY + (y * world.chunkSize));
+                    for (int z = 0; z < chunk.indexSize; z++)
+                    {
+                        world.SpawnCell(random ? elements[Rubedo.Lib.Random.Range(0, b)] : selectedElement, chunk, z);
+                    }
                 }
             }
         }

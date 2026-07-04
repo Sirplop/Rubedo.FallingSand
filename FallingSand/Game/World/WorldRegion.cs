@@ -29,16 +29,10 @@ public class WorldRegion
     private readonly int sizeShift;
     private readonly int regionMask;
 
-    public readonly Cell[] cells;
-    public readonly bool[] dirtyRectStep;
-    public WorldChunk[] chunks;
+    public int RegionX => regionX;
+    public int RegionY => regionY;
 
-    //we double up the movedWithFrame array so we can reset
-    //one while we use the other for the frame. Purely for performance.
-    private readonly bool[] movedWithFrame1;
-    private readonly bool[] movedWithFrame2;
-    private bool frameFlip = false;
-    private Task movedWithFrameReset = null;
+    public WorldChunk[] chunks;
 
     public WorldRegion(SandWorld world, int chunkSize, int chunksPerRegion, int x, int y)
     {
@@ -52,20 +46,11 @@ public class WorldRegion
         regionMask = regionSize - 1;
 
         textureData = new Color[regionSize * regionSize];
-        texture = new Texture2D(RubedoEngine.Graphics.GraphicsDevice, regionSize, regionSize);
-        chunks = new WorldChunk[chunksPerRegion * chunksPerRegion];
-        dirtyRectStep = new bool[regionSize * regionSize];
-        movedWithFrame1 = new bool[regionSize * regionSize];
-        movedWithFrame2 = new bool[regionSize * regionSize];
-        cells = new Cell[regionSize * regionSize];
-
-        int cellCount = regionSize * regionSize;
-        for (int i = 0; i < cellCount; i++)
+        if (!world.headless)
         {
-            int y1 = (i / regionSize) + regionY;
-            int x1 = (i % regionSize) + regionX;
-            cells[i] = new Cell(x1, y1);
+            texture = new Texture2D(RubedoEngine.Graphics.GraphicsDevice, regionSize, regionSize);
         }
+        chunks = new WorldChunk[chunksPerRegion * chunksPerRegion];
 
         for (int my = 0; my < chunksPerRegion; my++)
         {
@@ -81,8 +66,6 @@ public class WorldRegion
 #region Querying
     public WorldChunk GetChunk(int x, int y)
     {
-        int regionMask = regionSize - 1; // must be power of 2
-
         int localX = x & regionMask;
         int localY = y & regionMask;
 
@@ -92,91 +75,10 @@ public class WorldRegion
         int index = ay * chunksPerRegion + ax;
         return chunks[index];
     }
-
-    public Cell GetCell(int x, int y)
-    {
-        int i = GetIndex(x, y);
-        return cells[i];
-    }
-    public Cell GetCell(int index)
-    {
-        return cells[index];
-    }
-
-    public int GetIndex(int x, int y)
-    {
-        int localX = x & regionMask;
-        int localY = y & regionMask;
-        return localY * regionSize + localX;
-    }
-
-    public bool GetMovedWithFrame(int x, int y)
-    {
-        int i = GetIndex(x, y);
-        return frameFlip ? movedWithFrame2[i] : movedWithFrame1[i];
-    }
-    public bool GetMovedWithFrame(int index)
-    {
-        return frameFlip ? movedWithFrame2[index] : movedWithFrame1[index];
-    }
     #endregion
-    #region Setters
-    public void SetCell(Cell cell, int x, int y)
-    {
-        WorldChunk chunk = GetChunk(x, y);
-
-        if (chunk != null)
-            chunk.SetCell(cell, x, y);
-    }
-    public void SetMovedWithFrame(int x, int y)
-    {
-        int i = GetIndex(x, y);
-        if (frameFlip)
-        {
-            movedWithFrame2[i] = true;
-        }
-        else
-        {
-            movedWithFrame1[i] = true;
-        }
-    }
-    public void SetMovedWithFrame(int index)
-    {
-        if (frameFlip)
-        {
-            movedWithFrame2[index] = true;
-        }
-        else
-        {
-            movedWithFrame1[index] = true;
-        }
-    }
-#endregion
-
-    private void ResetMovedWithFrame()
-    {
-        if (frameFlip)
-        {
-            for (int i = 0; i < movedWithFrame1.Length; i++)
-            {
-                movedWithFrame1[i] = false;
-            }
-        }
-        else
-        {
-            for (int i = 0; i < movedWithFrame1.Length; i++)
-            {
-                movedWithFrame2[i] = false;
-            }
-        }
-    }
 
     public void MultithreadSetup(SandWorld world)
     {
-        movedWithFrameReset?.Wait();
-        frameFlip = !frameFlip;
-        movedWithFrameReset = new Task(ResetMovedWithFrame);
-        movedWithFrameReset.Start();
 
 #if USE_MULTITHREADING
         Parallel.For(0, chunks.Length, (i) =>
@@ -200,24 +102,38 @@ public class WorldRegion
             chunks[i].MultithreadFinish(world);
 #endif
     }
+    public int GetDrawIndex(int x, int y)
+    {
+        return (x - regionX) + ((y - regionY) * chunksPerRegion * chunkSize);
+    }
 
 
     public void Draw(Renderer renderer, Camera camera, float layer)
     {
-        bool updated = false;
 #if USE_MULTITHREADING
-        Parallel.For(0, chunks.Length, (i) =>
+        int len = chunks.Length;
+        bool[] updated = new bool[len];
+        Parallel.For(0, len, (i) =>
         {
-            updated |= chunks[i].Draw(this, camera, ref textureData);
+            updated[i] = chunks[i].Draw(this, camera, ref textureData);
         });
+        for (int i = 0; i < len; i++)
+        {
+            if (updated[i])
+            {
+                texture.SetData(textureData);
+                break;
+            }
+        }
 #else
+        bool updated = false;
         for (int i = 0; i < chunks.Length; i++)
         {
             updated |= chunks[i].Draw(this, camera, ref textureData);
         }
-#endif
         if (updated)
             texture.SetData(textureData);
+#endif
 
         renderer.Draw(
             texture,

@@ -1,4 +1,6 @@
-﻿namespace FallingSand.Game.Elements;
+﻿using System;
+
+namespace FallingSand.Game.Elements;
 
 /// <summary>
 /// TODO: I am Reaction, and I don't have a summary yet.
@@ -16,4 +18,10 @@ public struct ReactionKey
 {
     public int cellType1;
     public int cellType2;
+    public override readonly int GetHashCode()
+    {
+        int hashX = cellType1.GetHashCode();
+        int hashY = cellType2.GetHashCode();
+        return HashCode.Combine(Math.Min(hashX, hashY), Math.Max(hashX, hashY));
+    }
 }
