@@ -21,10 +21,10 @@ public class Spout : Component
         this.life = lifetime;
     }
 
-    public override void Update()
+    public override void FixedUpdate()
     {
-        worldRef.SpawnCell(element, Rubedo.Lib.Math.CeilToInt(Transform.Position.X), Rubedo.Lib.Math.CeilToInt(Transform.Position.Y));
-        life -= Time.DeltaTime;
+        worldRef.SpawnCell(element, Rubedo.Lib.Math.FloorToInt(Transform.Position.X), Rubedo.Lib.Math.FloorToInt(Transform.Position.Y));
+        life -= Time.FixedDeltaTime;
         if (life < 0)
             Entity.Destroy();
     }

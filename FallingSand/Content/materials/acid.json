@@ -1,0 +1,27 @@
+[
+	{
+		"internalName": "acid",
+		"cellType": "liquid",
+		"color": "ff33ff77",
+		"density": 0.9,
+
+		"liquid_maxSpeed": 5,
+		"liquid_gravity": 1,
+		"liquid_dispersion": 5,
+		"liquid_inertialResistance": 0,
+		"liquid_friction": 0,
+
+		"reaction": [
+			{
+				"probability": 50,
+				"input_cell_1": "acid",		"input_cell_2": "[corrodible]",
+				"output_cell_1": "acid",	"output_cell_2": "flammable_gas"
+			},
+			{
+				"probability": 5,
+				"input_cell_1": "acid",						"input_cell_2": "air",
+				"output_cell_1": "flammable_gas",	"output_cell_2": "air"
+			}
+		]
+	}
+]

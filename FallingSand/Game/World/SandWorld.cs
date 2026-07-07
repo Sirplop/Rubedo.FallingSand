@@ -70,8 +70,8 @@ public class SandWorld : RenderableComponent
         regionLookup = new Dictionary<int, Dictionary<int, WorldRegion>>();
         regions = new List<WorldRegion>();
 
-        const int REGION_X = 6;
-        const int REGION_Y = 6;
+        const int REGION_X = 4;
+        const int REGION_Y = 4;
 
         for (int x = 0; x < REGION_X; x++)
         {
@@ -139,7 +139,7 @@ public class SandWorld : RenderableComponent
         }
 
         const int GRIDSIZE = 2;
-        const int PASSES = 2;
+        const int PASSES = 3;
 
         _updateGrid.Clear();
         for (int i = 0; i < GRIDSIZE * GRIDSIZE; i++)
@@ -200,7 +200,7 @@ public class SandWorld : RenderableComponent
 
     private void RunChunkUpdate(int i)
     {
-        _phaseGrid[i].MultithreadStep(this, _currentStep);
+        _phaseGrid[i].MultithreadStep(this, in _currentStep);
     }
 
     public void GetRegionLocation(int x, int y, out int regX, out int regY)
@@ -257,6 +257,7 @@ public class SandWorld : RenderableComponent
         chunk.velocity[cellID] = new Vector2(0, 0);
         chunk.color[cellID] = ElementManager.color[element] * rnd.Range(0.9f, 1.1f);
         chunk.ThreadEnvelop(x, y);
+        chunk.RenderRect.Union(x, y);
         return true;
     }
 
@@ -273,6 +274,7 @@ public class SandWorld : RenderableComponent
         chunk.velocity[cellID] = new Vector2(0, 0);
         chunk.color[cellID] = ElementManager.color[element] * rnd.Range(0.9f, 1.1f);
         chunk.ThreadEnvelop(cellID);
+        chunk.RenderRect.Union((cellID / chunkSize) + chunk.chunkY, (cellID % chunkSize) + chunk.chunkX);
         return true;
     }
 
@@ -297,10 +299,23 @@ public class SandWorld : RenderableComponent
 
         chunk.velocity[cellID] = new Vector2(0, 0);
         chunk.color[cellID] = ElementManager.color[ElementManager.EMPTY];
-        chunk.ThreadEnvelop(x, y);
+        chunk.ThreadEnvelop(cellID);
+        chunk.RenderRect.Union(x, y);
         return true;
     }
+    public bool ClearCell(WorldChunk chunk, int cellID)
+    {
+        chunk.element[cellID] = 0;
+        ref WorldChunk.Moving moving = ref chunk.moving[cellID];
+        moving.isMoving = true;
+        moving.movingCount = 0; //naughty naughty, mutating a struct...
 
+        chunk.velocity[cellID] = new Vector2(0, 0);
+        chunk.color[cellID] = ElementManager.color[ElementManager.EMPTY];
+        chunk.ThreadEnvelop(cellID);
+        chunk.RenderRect.Union((cellID / chunkSize) + chunk.chunkY, (cellID % chunkSize) + chunk.chunkX);
+        return true;
+    }
 
     public void IterateAndApplyBetweenPoints(Point pos1, Point pos2, Action<int, int> func)
     {

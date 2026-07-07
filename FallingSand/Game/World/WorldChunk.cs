@@ -1,15 +1,12 @@
-﻿#define USE_SHUFFLE_X
-//#define USE_DOUBLE_MWF_BUFFER
+﻿//#define USE_DOUBLE_MWF_BUFFER
+#define USE_CHECKERBOARD_UPDATE
+#define USE_ALTERNATING_UPDATE
 
 using FallingSand.Game.Elements;
-using Loyc;
 using Microsoft.Xna.Framework;
 using Rubedo.Graphics;
 using Rubedo.Lib;
-using Rubedo.Lib.Extensions;
-using System;
 using System.Runtime.CompilerServices;
-using System.Threading.Tasks;
 
 namespace FallingSand.Game.World;
 
@@ -19,12 +16,6 @@ namespace FallingSand.Game.World;
 public class WorldChunk
 {
     public Squirrel3 chunkRNG;
-    public ReactionKey reactionCache;
-
-    //TODO: Implement switching between two bitarrays to make resets faster.
-    /*private readonly BitArray movedWithFrame2;
-    private BitArray movedWithFrameActual;
-    private bool mwfFlip = false;*/
 
     private readonly RectF cameraIntersection;
 
@@ -66,7 +57,6 @@ public class WorldChunk
     public readonly int halfSize;
     public readonly int halfSizeShift;
 
-    private int[] shuffledX; //this is the entire chunk grid.
     private WorldChunk[] multithreadChunkRef;
 
     public int gravity;
@@ -86,7 +76,6 @@ public class WorldChunk
         this.chunkY = worldY * size;
         cameraIntersection = new RectF(chunkX - 4, chunkY - 4, size + 8, size + 8);
 
-        shuffledX = new int[indexSize];
         dirtyRectStep = new bool[indexSize];
         element = new int[indexSize];
         velocity = new Vector2[indexSize];
@@ -106,7 +95,6 @@ public class WorldChunk
         {
             int y1 = (i / size);
             int x1 = (i % size);
-            shuffledX[i] = x1 + chunkX;
 
             element[i] = 0;
             velocity[i] = new Vector2(0, 0);
@@ -117,22 +105,8 @@ public class WorldChunk
         multithreadChunkRef = new WorldChunk[9];
         multithreadChunkRef[4] = this;
     }
-    private void ShuffleXIndices(int startX, int endX, int startY, int endY)
-    {
-        for (int y = startY; y < endY; y++)
-        {
-            for (int x = startX; x < endX; x++)
-            {
-                shuffledX[GetCellIndex(in x, in y)] = x;
-            }
-            int v = GetCellIndex(in startX, in y);
-            shuffledX.FYSubShuffle(v, endX - startX, ref chunkRNG);
-        }
-    }
     #region Multithreaded
-#if !USE_SHUFFLE_X
     bool flip = true;
-#endif
     private void ResetMovedWithFrame()
     {
 #if USE_DOUBLE_MWF_BUFFER
@@ -182,16 +156,8 @@ public class WorldChunk
         ResetMovedWithFrame();
 #endif
 
-#if !USE_SHUFFLE_X
         flip = !flip;
-#else
-        int dirtyX = Rubedo.Lib.Math.Clamp(dirtyRect.X, chunkX, chunkX + size);
-        int finX = Rubedo.Lib.Math.Clamp(dirtyRect.Right, chunkX, chunkX + size);
-        int dirtyY = Rubedo.Lib.Math.Clamp(dirtyRect.Y, chunkY, chunkY + size);
-        int finY = Rubedo.Lib.Math.Clamp(dirtyRect.Bottom, chunkY, chunkY + size);
 
-        ShuffleXIndices(dirtyX, finX, dirtyY, finY);
-#endif
         for (int y = -1; y <= 1; y++)
         {
             int valY = chunkY + (y * size);
@@ -213,7 +179,7 @@ public class WorldChunk
             }
         }
     }
-    public void MultithreadStep(SandWorld matrix, int step)
+    public void MultithreadStep(SandWorld matrix, in int step)
     {
         if (dirtyRect.IsEmpty)
             return;
@@ -223,107 +189,301 @@ public class WorldChunk
         int dirtyY = Rubedo.Lib.Math.Clamp(dirtyRect.Y, chunkY, chunkY + size);
         int finY = Rubedo.Lib.Math.Clamp(dirtyRect.Bottom, chunkY, chunkY + size);
 
-#if USE_SHUFFLE_X
-
         var localElementArray = this.element;
-        var localShuffledX = this.shuffledX; // if used repeatedly
-        var localMovedWithFrame = this.movedWithFrame; // adapt for your compilation flags
+        var localMovedWithFrame = this.movedWithFrame;
         var localTypeLookup = ElementManager.typeLookup;
 
-        for (int y = dirtyY; y < finY; y++)
-        {
-            int yIndex = (y - chunkY) * size;
-            for (int x = dirtyX; x < finX; x++)
-            {
-                int cellID = yIndex + (x - chunkX);
-                int x1 = x;//localShuffledX[i];
-                //i = yIndex + (x1 - chunkX);
-                bool moved = localMovedWithFrame[cellID];
-                if (!moved)
-                {
-                    int elementID = localElementArray[cellID];
-                    if (elementID == ElementManager.EMPTY)
-                        continue;
+#if USE_ALTERNATING_UPDATE
+        //bool sectionFlip = flip;
+        bool sectionFlip = flip ^ (((dirtyY - chunkY) & 1) != 0);
 
-                    ElementManager.Type elementType = localTypeLookup[elementID];
-                    switch (elementType)
-                    {
-                        case ElementManager.Type.LIQUID:
-                            ElementBehaviour.StepLiquid(this, x1, y, cellID, elementID);
-                            break;
-                        case ElementManager.Type.GAS:
-                            ElementBehaviour.StepGas(this, x1, y, cellID);
-                            break;
-                        case ElementManager.Type.PHYSICS_SOLID:
-                            break;
-                        case ElementManager.Type.EMPTY:
-                            break;
-                    }
-                }
-            }
-        }
-#else
-        if (flip)
+#if USE_CHECKERBOARD_UPDATE
+
+        int evenWidth = ((finX - dirtyX) & 1) == 0 ? 1 : 0;
+
+        if (step == 1)
         {
+            int xStart = 0;
+            if (flip)
+            {
+                xStart = 1;
+            }
             for (int y = dirtyY; y < finY; y++)
             {
-                for (int x = finX - 1; x >= dirtyX; x--)
+                int yIndex = (y - chunkY) * size;
+                if (flip)
                 {
-                    int x1 = shuffledX[y - chunkY, x - chunkX];
-                    int i = GetIndex(x1, y);
-                    if (!MovedWithFrame(i))
+                    for (int x = finX - 1 - xStart; x >= dirtyX; x -= 2)
                     {
-                        int cellID = GetCell(i);
-                        int element = cellData.element[cellID];
-                        if (element != ElementManager.EMPTY)
+                        int cellID = yIndex + (x - chunkX);
+                        bool moved = localMovedWithFrame[cellID];
+                        if (!moved)
                         {
-                            switch (ElementManager.typeLookup[element])
+                            int elementID = localElementArray[cellID];
+                            if (elementID == ElementManager.EMPTY)
+                                continue;
+
+                            ElementManager.Type elementType = localTypeLookup[elementID];
+                            switch (elementType)
                             {
-                                case ElementManager.Type.PHYSICS_SOLID:
-                                    break;
                                 case ElementManager.Type.LIQUID:
-                                    ElementBehaviour.StepLiquid(this, x1, y, cellID);
+                                    ElementBehaviour.StepLiquid(this, in x, in y, cellID, in elementID);
                                     break;
                                 case ElementManager.Type.GAS:
-                                    ElementBehaviour.StepGas(this, x1, y, cellID);
+                                    ElementBehaviour.StepGas(this, in x, in y, cellID, in elementID);
+                                    break;
+                                case ElementManager.Type.PHYSICS_SOLID:
+                                    break;
+                                case ElementManager.Type.EMPTY:
                                     break;
                             }
                         }
                     }
                 }
+                else
+                {
+                    for (int x = dirtyX + xStart; x < finX; x += 2)
+                    {
+                        int cellID = yIndex + (x - chunkX);
+                        bool moved = localMovedWithFrame[cellID];
+                        if (!moved)
+                        {
+                            int elementID = localElementArray[cellID];
+                            if (elementID == ElementManager.EMPTY)
+                                continue;
+
+                            ElementManager.Type elementType = localTypeLookup[elementID];
+                            switch (elementType)
+                            {
+                                case ElementManager.Type.LIQUID:
+                                    ElementBehaviour.StepLiquid(this, in x, in y, cellID, in elementID);
+                                    break;
+                                case ElementManager.Type.GAS:
+                                    ElementBehaviour.StepGas(this, in x, in y, cellID, in elementID);
+                                    break;
+                                case ElementManager.Type.PHYSICS_SOLID:
+                                    break;
+                                case ElementManager.Type.EMPTY:
+                                    break;
+                            }
+                        }
+                    }
+                }
+
+                xStart = xStart == 0 ? 1 : 0;
             }
         }
         else
         {
+#endif
             for (int y = dirtyY; y < finY; y++)
             {
-                for (int x = dirtyX; x < finX; x++)
+                int yIndex = (y - chunkY) * size;
+                if (sectionFlip)
                 {
-                    int x1 = shuffledX[y - chunkY, x - chunkX];
-                    int i = GetIndex(x1, y);
-                    if (!MovedWithFrame(i))
+                    for (int x = finX - 1; x >= dirtyX; x--)
                     {
-                        int cellID = GetCell(i);
-                        int element = cellData.element[cellID];
-                        if (element != ElementManager.EMPTY)
+                        int cellID = yIndex + (x - chunkX);
+                        bool moved = localMovedWithFrame[cellID];
+                        if (!moved)
                         {
-                            switch (ElementManager.typeLookup[element])
+                            int elementID = localElementArray[cellID];
+                            if (elementID == ElementManager.EMPTY)
+                                continue;
+
+                            ElementManager.Type elementType = localTypeLookup[elementID];
+                            switch (elementType)
                             {
-                                case ElementManager.Type.PHYSICS_SOLID:
-                                    break;
                                 case ElementManager.Type.LIQUID:
-                                    ElementBehaviour.StepLiquid(this, x1, y, cellID);
+                                    ElementBehaviour.StepLiquid(this, in x, in y, cellID, in elementID);
                                     break;
                                 case ElementManager.Type.GAS:
-                                    ElementBehaviour.StepGas(this, x1, y, cellID);
+                                    ElementBehaviour.StepGas(this, in x, in y, cellID, in elementID);
+                                    break;
+                                case ElementManager.Type.PHYSICS_SOLID:
+                                    break;
+                                case ElementManager.Type.EMPTY:
+                                    break;
+                            }
+                        }
+                    }
+                }
+                else
+                {
+                    for (int x = dirtyX; x < finX; x++)
+                    {
+                        int cellID = yIndex + (x - chunkX);
+                        bool moved = localMovedWithFrame[cellID];
+                        if (!moved)
+                        {
+                            int elementID = localElementArray[cellID];
+                            if (elementID == ElementManager.EMPTY)
+                                continue;
+
+                            ElementManager.Type elementType = localTypeLookup[elementID];
+                            switch (elementType)
+                            {
+                                case ElementManager.Type.LIQUID:
+                                    ElementBehaviour.StepLiquid(this, in x, in y, cellID, in elementID);
+                                    break;
+                                case ElementManager.Type.GAS:
+                                    ElementBehaviour.StepGas(this, in x, in y, cellID, in elementID);
+                                    break;
+                                case ElementManager.Type.PHYSICS_SOLID:
+                                    break;
+                                case ElementManager.Type.EMPTY:
+                                    break;
+                            }
+                        }
+                    }
+                }
+                sectionFlip = !sectionFlip;
+            }
+#if USE_CHECKERBOARD_UPDATE
+        }
+#endif
+#else
+#if USE_CHECKERBOARD_UPDATE
+        if (step == 1)
+        {
+            int xStart = 0;
+            if (flip)
+            {
+                xStart = 1;
+            }
+            for (int y = dirtyY; y < finY; y++)
+            {
+                int yIndex = (y - chunkY) * size;
+                if (flip)
+                {
+                    for (int x = finX - 1 - xStart; x >= dirtyX; x -= 2)
+                    {
+                        int cellID = yIndex + (x - chunkX);
+                        bool moved = localMovedWithFrame[cellID];
+                        if (!moved)
+                        {
+                            int elementID = localElementArray[cellID];
+                            if (elementID == ElementManager.EMPTY)
+                                continue;
+
+                            ElementManager.Type elementType = localTypeLookup[elementID];
+                            switch (elementType)
+                            {
+                                case ElementManager.Type.LIQUID:
+                                    ElementBehaviour.StepLiquid(this, in x, in y, cellID, in elementID);
+                                    break;
+                                case ElementManager.Type.GAS:
+                                    ElementBehaviour.StepGas(this, in x, in y, cellID);
+                                    break;
+                                case ElementManager.Type.PHYSICS_SOLID:
+                                    break;
+                                case ElementManager.Type.EMPTY:
+                                    break;
+                            }
+                        }
+                    }
+                }
+                else
+                {
+                    for (int x = dirtyX + xStart; x < finX; x += 2)
+                    {
+                        int cellID = yIndex + (x - chunkX);
+                        bool moved = localMovedWithFrame[cellID];
+                        if (!moved)
+                        {
+                            int elementID = localElementArray[cellID];
+                            if (elementID == ElementManager.EMPTY)
+                                continue;
+
+                            ElementManager.Type elementType = localTypeLookup[elementID];
+                            switch (elementType)
+                            {
+                                case ElementManager.Type.LIQUID:
+                                    ElementBehaviour.StepLiquid(this, in x, in y, cellID, in elementID);
+                                    break;
+                                case ElementManager.Type.GAS:
+                                    ElementBehaviour.StepGas(this, in x, in y, cellID);
+                                    break;
+                                case ElementManager.Type.PHYSICS_SOLID:
+                                    break;
+                                case ElementManager.Type.EMPTY:
+                                    break;
+                            }
+                        }
+                    }
+                }
+
+                xStart = xStart == 0 ? 1 : 0;
+            }
+        }
+        else
+        {
+#endif
+            for (int y = dirtyY; y < finY; y++)
+            {
+                int yIndex = (y - chunkY) * size;
+                if (flip)
+                {
+                    for (int x = finX - 1; x >= dirtyX; x--)
+                    {
+                        int cellID = yIndex + (x - chunkX);
+                        bool moved = localMovedWithFrame[cellID];
+                        if (!moved)
+                        {
+                            int elementID = localElementArray[cellID];
+                            if (elementID == ElementManager.EMPTY)
+                                continue;
+
+                            ElementManager.Type elementType = localTypeLookup[elementID];
+                            switch (elementType)
+                            {
+                                case ElementManager.Type.LIQUID:
+                                    ElementBehaviour.StepLiquid(this, in x, in y, cellID, in elementID);
+                                    break;
+                                case ElementManager.Type.GAS:
+                                    ElementBehaviour.StepGas(this, in x, in y, cellID);
+                                    break;
+                                case ElementManager.Type.PHYSICS_SOLID:
+                                    break;
+                                case ElementManager.Type.EMPTY:
+                                    break;
+                            }
+                        }
+                    }
+                }
+                else
+                {
+                    for (int x = dirtyX; x < finX; x++)
+                    {
+                        int cellID = yIndex + (x - chunkX);
+                        bool moved = localMovedWithFrame[cellID];
+                        if (!moved)
+                        {
+                            int elementID = localElementArray[cellID];
+                            if (elementID == ElementManager.EMPTY)
+                                continue;
+
+                            ElementManager.Type elementType = localTypeLookup[elementID];
+                            switch (elementType)
+                            {
+                                case ElementManager.Type.LIQUID:
+                                    ElementBehaviour.StepLiquid(this, in x, in y, cellID, in elementID);
+                                    break;
+                                case ElementManager.Type.GAS:
+                                    ElementBehaviour.StepGas(this, in x, in y, cellID);
+                                    break;
+                                case ElementManager.Type.PHYSICS_SOLID:
+                                    break;
+                                case ElementManager.Type.EMPTY:
                                     break;
                             }
                         }
                     }
                 }
             }
+#if USE_CHECKERBOARD_UPDATE
         }
-
+#endif
 #endif
     }
 
@@ -443,6 +603,7 @@ public class WorldChunk
         Pad(localX2, localY2);
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void Swap(in int actor, in int target)
     {
         (element[actor], element[target]) = (element[target], element[actor]);
@@ -595,9 +756,9 @@ public class WorldChunk
             moving.movingCount = 0; //naughty naughty, mutating a struct...
         }
     }
-    public void SetMovingPos(int x, int y)
+    public void SetMovingPos(in int x, in int y)
     {
-        if (InBounds(x, y))
+        if (InBounds(in x, in y))
         {
             int cell = GetCellIndex(in x, in y);
             int elementID = this.element[cell];
@@ -610,7 +771,7 @@ public class WorldChunk
             {
                 int cell = chunk.GetCellIndex(in x, in y);
                 int elementID = chunk.element[cell];
-                chunk.SetMoving(cell, elementID);
+                chunk.SetMoving(in cell, in elementID);
             }
         }
     }

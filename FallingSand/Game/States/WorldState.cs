@@ -1,24 +1,24 @@
-﻿using FallingSand.Game.World;
-using Rubedo;
-using Rubedo.Graphics.Viewports;
-using Rubedo.Graphics;
-using Rubedo.Input.Conditions;
-using Rubedo.UI;
-using Rubedo.Object;
-using Microsoft.Xna.Framework;
-using Rubedo.Input;
-using FallingSand.Game.Elements;
-using Microsoft.Xna.Framework.Input;
-using FontStashSharp;
-using Rubedo.EngineDebug;
-using Rubedo.UI.Layout;
-using System;
-using Rubedo.UI.Text;
-using System.Collections.Generic;
-using Microsoft.Xna.Framework.Graphics;
-using Rubedo.Resources;
+﻿using FallingSand.Game.Elements;
 using FallingSand.Game.UI;
+using FallingSand.Game.World;
+using FontStashSharp;
+using Microsoft.Xna.Framework;
+using Microsoft.Xna.Framework.Graphics;
+using Microsoft.Xna.Framework.Input;
+using Rubedo;
+using Rubedo.EngineDebug;
+using Rubedo.Graphics;
+using Rubedo.Graphics.Viewports;
+using Rubedo.Input;
+using Rubedo.Input.Conditions;
 using Rubedo.Lib.Extensions;
+using Rubedo.Object;
+using Rubedo.Resources;
+using Rubedo.UI;
+using Rubedo.UI.Layout;
+using Rubedo.UI.Text;
+using System;
+using System.Collections.Generic;
 
 namespace FallingSand.Game.States;
 
@@ -44,8 +44,11 @@ public class WorldState : GameState
     private readonly KeyCondition cameraReset = new KeyCondition(Keys.R);
     private readonly KeyCondition pauseSim = new KeyCondition(Keys.P);
     private readonly KeyCondition stepSim = new KeyCondition(Keys.O);
-    private readonly AllCondition spawnCheckerboard = new AllCondition(new KeyCondition(Keys.Z), new NotCondition(new KeyCondition(Keys.LeftShift, true)));
-    private readonly AllCondition spawnRandomCheckerboard = new AllCondition(new KeyCondition(Keys.Z), new KeyCondition(Keys.LeftShift, true));
+    private readonly KeyCondition clearAll = new KeyCondition(Keys.Tab);
+    private readonly AllCondition spawnCheckerboard = new AllCondition(new KeyCondition(Keys.Z), new NotCondition(new KeyCondition(Keys.LeftShift, true)), new NotCondition(new KeyCondition(Keys.LeftControl, true)));
+    private readonly AllCondition spawnRandomCheckerboard = new AllCondition(new KeyCondition(Keys.Z), new KeyCondition(Keys.LeftShift, true), new NotCondition(new KeyCondition(Keys.LeftControl, true)));
+    private readonly AllCondition spawnTopHalf = new AllCondition(new KeyCondition(Keys.Z), new KeyCondition(Keys.LeftControl, true), new NotCondition(new KeyCondition(Keys.LeftShift, true)));
+    private readonly AllCondition spawnRandomTopHalf = new AllCondition(new KeyCondition(Keys.Z), new KeyCondition(Keys.LeftControl, true), new KeyCondition(Keys.LeftShift, true));
     private readonly KeyCondition toggleCells = new KeyCondition(Keys.C);
     private readonly KeyCondition toggleRects = new KeyCondition(Keys.V);
     private readonly KeyCondition togglePosition = new KeyCondition(Keys.B);
@@ -223,8 +226,10 @@ public class WorldState : GameState
 
         if (middleClickCondition.Pressed())
         {
-            Point mouse = InputManager.MouseWorldPosition().ToPoint();
-            Entity entity = new Entity(mouse.ToVector2())
+            Vector2 mouse = InputManager.MouseWorldPosition();
+            int x = Rubedo.Lib.Math.FloorToInt(mouse.X);
+            int y = Rubedo.Lib.Math.FloorToInt(mouse.Y);
+            Entity entity = new Entity(new Vector2(x, y))
             {
                 new Spout(world, selectedElement, brushSize)
             };
@@ -306,6 +311,18 @@ public class WorldState : GameState
         {
             SpawnCheckerboard(true);
         }
+        if (spawnTopHalf.Pressed())
+        {
+            SpawnTopHalf(false);
+        }
+        if (spawnRandomTopHalf.Pressed())
+        {
+            SpawnTopHalf(true);
+        }
+        if (clearAll.Pressed())
+        {
+            ClearAll();
+        }
     }
 
     private void SpawnCell(bool pressed, bool held, int type, int chance)
@@ -314,14 +331,18 @@ public class WorldState : GameState
         {
             if (held)
             {
-                Point curPos = InputManager.MouseWorldPosition().ToPoint();
-                Point prevPos = InputManager.PreviousMouseWorldPosition().ToPoint();
+                Vector2 mouse = InputManager.MouseWorldPosition();
+                Point curPos = new Point(Rubedo.Lib.Math.FloorToInt(mouse.X), Rubedo.Lib.Math.FloorToInt(mouse.Y));
+                Vector2 mousePrev = InputManager.PreviousMouseWorldPosition();
+                Point prevPos = new Point(Rubedo.Lib.Math.FloorToInt(mousePrev.X), Rubedo.Lib.Math.FloorToInt(mousePrev.Y));
                 world.IterateAndApplyBetweenPoints(prevPos, curPos, (x, y) => SpawnCellRun(x, y, type, chance, brushSize));
             }
             else
             {
-                Point pos = InputManager.MouseWorldPosition().ToPoint();
-                SpawnCellRun(pos.X, pos.Y, type, chance, brushSize);
+                Vector2 mouse = InputManager.MouseWorldPosition();
+                int x = Rubedo.Lib.Math.FloorToInt(mouse.X);
+                int y = Rubedo.Lib.Math.FloorToInt(mouse.Y);
+                SpawnCellRun(x, y, type, chance, brushSize);
             }
         }
     }
@@ -373,6 +394,57 @@ public class WorldState : GameState
                     for (int z = 0; z < chunk.indexSize; z++)
                     {
                         world.SpawnCell(random ? elements[Rubedo.Lib.Random.Range(0, b)] : selectedElement, chunk, z);
+                    }
+                }
+            }
+        }
+    }
+
+    public void SpawnTopHalf(bool random)
+    {
+        int[] elements = new int[ElementManager.elementsByName.Values.Count];
+        int b = 0;
+        foreach (int el in ElementManager.elementsByName.Values)
+        {
+            elements[b++] = el;
+        }
+        int size = world.chunksPerRegion;
+        int worldHalf = world.WorldRect.Bottom - (world.WorldRect.Height / 2);
+        for (int i = 0; i < world.regions.Count; i++)
+        {
+            WorldRegion region = world.regions[i];
+            for (int y = 0; y < size; y++)
+            {
+                int yLevel = region.RegionY + (y * world.chunkSize);
+                if (yLevel < worldHalf)
+                    continue;
+                for (int x = 0; x < size; x++)
+                {
+                    WorldChunk chunk = region.GetChunk(region.RegionX + (x * world.chunkSize), yLevel);
+                    for (int z = 0; z < chunk.indexSize; z++)
+                    {
+                        world.SpawnCell(random ? elements[Rubedo.Lib.Random.Range(0, b)] : selectedElement, chunk, z);
+                    }
+                }
+            }
+        }
+    }
+
+    public void ClearAll()
+    {
+        int size = world.chunksPerRegion;
+        for (int i = 0; i < world.regions.Count; i++)
+        {
+            WorldRegion region = world.regions[i];
+            for (int y = 0; y < size; y++)
+            {
+                int yLevel = region.RegionY + (y * world.chunkSize);
+                for (int x = 0; x < size; x++)
+                {
+                    WorldChunk chunk = region.GetChunk(region.RegionX + (x * world.chunkSize), yLevel);
+                    for (int z = 0; z < chunk.indexSize; z++)
+                    {
+                        world.ClearCell(chunk, z);
                     }
                 }
             }

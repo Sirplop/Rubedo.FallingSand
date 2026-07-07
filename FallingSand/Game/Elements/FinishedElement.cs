@@ -1,6 +1,7 @@
 ﻿using FallingSand.Game.World;
 using Microsoft.Xna.Framework;
 using Rubedo.Lib;
+using System.Collections.Generic;
 
 namespace FallingSand.Game.Elements;
 
@@ -9,6 +10,8 @@ namespace FallingSand.Game.Elements;
 /// </summary>
 public class FinishedElement
 {
+    public Dictionary<ReactionKey, ReactionValue> reactions = new Dictionary<ReactionKey, ReactionValue>();
+
     public int element_id; //assigned by the system on element load, for quicker reaction lookups.
 
     public string[] tags;

@@ -4,17 +4,31 @@
 		"cellType": "liquid",
 		"color": "ff1464ab",
 		"density": 1,
-		
+
 		"liquid_maxSpeed": 5,
 		"liquid_gravity": 1,
 		"liquid_dispersion": 5,
 		"liquid_inertialResistance": 0,
 		"liquid_friction": 0,
+
+		"reaction": [
+			{
+				"probability": 20,
+				"input_cell_1": "water",	"output_cell_1": "steam",
+				"input_cell_2": "lava",		"output_cell_2": "stone"
+			},
+			{
+				"probability": 20,
+				"input_cell_1": "water",							"output_cell_1": "steam",
+				"input_cell_2": "[meltable]_molten",	"output_cell_2": "[meltable]"
+			}
+		]
 	},
 	{
 		"parent": "water",
+		"inheritReactions": true,
 		"internalName": "blood",
 		"color": "ffa52201",
-		"density": 1.2,
+		"density": 1.2
 	}
 ]

@@ -1,11 +1,12 @@
-﻿using Microsoft.Xna.Framework.Content;
+﻿using FallingSand.Game.World;
+using Microsoft.Xna.Framework;
+using Microsoft.Xna.Framework.Content;
+using Rubedo.Lib;
 using System.Collections.Generic;
 using System.IO;
-using System.Text.Json.Nodes;
 using System.Text.Json;
-using FallingSand.Game.World;
+using System.Text.Json.Nodes;
 using System.Xml.Linq;
-using Rubedo.Lib;
 
 namespace FallingSand.Game.Elements;
 
@@ -206,6 +207,39 @@ public static class ElementLoader
                 element.def_liquid_friction = true;
             }
 
+            if (jsonObj.TryGetPropertyValue("reaction", out JsonNode reactNode))
+            {
+                JsonArray reactArray = reactNode.AsArray();
+                foreach (JsonNode react in reactArray)
+                {
+                    JsonObject reaction = react.AsObject();
+                    if (!CheckValue(reaction, "probability", out int probability))
+                    {
+                        throw new JsonException($"Malformed reaction for element {element.internalName} in file '{path}'");
+                    }
+                    if (!CheckValue(reaction, "input_cell_1", out string input_cell_1))
+                    {
+                        throw new JsonException($"Malformed reaction for element {element.internalName} in file '{path}'");
+                    }
+                    if (!CheckValue(reaction, "input_cell_2", out string input_cell_2))
+                    {
+                        throw new JsonException($"Malformed reaction for element {element.internalName} in file '{path}'");
+                    }
+                    if (!CheckValue(reaction, "output_cell_1", out string output_cell_1))
+                    {
+                        throw new JsonException($"Malformed reaction for element {element.internalName} in file '{path}'");
+                    }
+                    if (!CheckValue(reaction, "output_cell_2", out string output_cell_2))
+                    {
+                        throw new JsonException($"Malformed reaction for element {element.internalName} in file '{path}'");
+                    }
+
+                    ReactionValue r = new ReactionValue() { outputCell1 = output_cell_1, outputCell2 = output_cell_2, probability = probability };
+
+                    element.reactions.Add(new ReactionKey() { cellType1 = input_cell_1, cellType2 = input_cell_2 }, r);
+                }
+            }
+
             elements[i++] = element;
         }
 
@@ -223,7 +257,7 @@ public static class ElementLoader
             catch
             {
                 json.TryGetPropertyValue("internalName", out JsonNode elementName);
-                throw new JsonException($"Wrong data type for '{name}' in element '{elementName.GetValue<string>()}'!");
+                throw new JsonException($"Wrong data type for '{name}' in element '{elementName.GetValue<string>()}'! (was {typeof(T)})");
             }
             return true;
         }

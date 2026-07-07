@@ -3,7 +3,7 @@
 		"internalName": "smoke",
 		"cellType": "gas",
 		"color": "ff4d4d4d",
-		"density": 1,
+		"density": 0.6,
 		
 		"liquid_isSand": true,
 		"liquid_maxSpeed": 5,

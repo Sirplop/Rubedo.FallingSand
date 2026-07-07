@@ -1,6 +1,9 @@
-﻿using Microsoft.Xna.Framework;
+﻿using FallingSand.Game.World;
+using Microsoft.Xna.Framework;
+using Microsoft.Xna.Framework.Content;
 using Rubedo;
 using Rubedo.Resources;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Xml.Linq;
@@ -59,8 +62,8 @@ public static class ElementManager
         }
 
         reactions = new Dictionary<long, Reaction>();
-        elementsByName = new Dictionary<string, int>();
-        elementsByColor = new Dictionary<Color, int>();
+        elementsByName = new Dictionary<string, int>() { { "air", 0 } };
+        elementsByColor = new Dictionary<Color, int>() { { Color.Transparent, 0 } };
         elementsByTag = new Dictionary<string, HashSet<int>>();
         elementPrototypes = new List<ProtoElement>();
     }
@@ -96,7 +99,7 @@ public static class ElementManager
         liquid_gravity[0] = 0;
         liquid_dispersion[0] = 0;
         liquid_inertialResistance[0] = 0;
-        liquid_friction[0] =0;
+        liquid_friction[0] = 0;
 
         for (int i = 1; i < count; i++)
         {
@@ -125,8 +128,10 @@ public static class ElementManager
             liquid_dispersion[i] = element.liquid_dispersion;
             liquid_inertialResistance[i] = element.liquid_inertialResistance;
             liquid_friction[i] = element.liquid_friction;
-
         }
+
+        LoadReactions(elements);
+
         Loaded = true;
     }
 
@@ -159,16 +164,191 @@ public static class ElementManager
         elementPrototypes.AddRange(prototypes);
     }
 
+    /// <summary>
+    /// Takes the list of prototypes and their reactions, and maps them into the proper reaction format.
+    /// </summary>
+    private static void LoadReactions(List<FinishedElement> elements)
+    {
+        int count = elements.Count;
+        for (int id = 1; id < count; id++)
+        {
+            FinishedElement element = elements[id];
+            if (element.reactions.Count == 0)
+                continue;
+
+            foreach (KeyValuePair<ReactionKey, ReactionValue> reaction in element.reactions)
+            {
+                List<string> cellType1 = new List<string>();
+                string preTag_1;
+                string postTag_1;
+                string tagName_1;
+                if (reaction.Key.cellType1.Contains('['))
+                { //this is a tag! split it up!
+                    string[] split = reaction.Key.cellType1.Split('[');
+                    preTag_1 = split[0];
+                    split = split[1].Split(']');
+                    postTag_1 = split[1];
+                    tagName_1 = split[0];
+                    HashSet<int> possibleElements = elementsByTag[tagName_1];
+                    foreach (int pID in possibleElements)
+                    {
+                        string elementName = elements[pID].internalName;
+                        cellType1.Add(elementName);
+                    }
+                }
+                else
+                {
+                    preTag_1 = "";
+                    postTag_1 = "";
+                    tagName_1 = "";
+                    cellType1.Add(reaction.Key.cellType1);
+                }
+
+                List<string> cellType2 = new List<string>();
+                string preTag_2;
+                string postTag_2;
+                string tagName_2;
+                if (reaction.Key.cellType2.Contains('['))
+                { //this is a tag! split it up!
+                    string[] split = reaction.Key.cellType2.Split('[');
+                    preTag_2 = split[0];
+                    split = split[1].Split(']');
+                    postTag_2 = split[1];
+                    tagName_2 = split[0];
+                    HashSet<int> possibleElements = elementsByTag[tagName_2];
+                    foreach (int pID in possibleElements)
+                    {
+                        string elementName = elements[pID].internalName;
+                        cellType2.Add(elementName);
+                    }
+                }
+                else
+                {
+                    preTag_2 = "";
+                    postTag_2 = "";
+                    tagName_2 = "";
+                    cellType2.Add(reaction.Key.cellType2);
+                }
+
+                int out_1 = 0;
+                string preTagOut_1;
+                string postTagOut_1;
+                if (reaction.Value.outputCell1.Contains('['))
+                { //it's a tag again! make sure it's the same tag as in cell type 1
+                    string[] split = reaction.Value.outputCell1.Split('[');
+                    preTagOut_1 = split[0];
+                    split = split[1].Split(']');
+                    postTagOut_1 = split[1];
+                    string tag = split[0];
+                    if (tag != tagName_1)
+                        throw new ContentLoadException($"Element {elements[id].internalName} has a malformed reaction! (Tag mismatch: {tagName_1}, {tag})");
+
+                    out_1 = -1;
+                }
+                else
+                {
+                    preTagOut_1 = "";
+                    postTagOut_1 = "";
+                    out_1 = elementsByName[reaction.Value.outputCell1];
+                }
+
+                int out_2 = 0;
+                string preTagOut_2;
+                string postTagOut_2;
+                if (reaction.Value.outputCell2.Contains('['))
+                { //it's a tag again! make sure it's the same tag as in cell type 2
+                    string[] split = reaction.Value.outputCell2.Split('[');
+                    preTagOut_2 = split[0];
+                    split = split[1].Split(']');
+                    postTagOut_2 = split[1];
+                    string tag = split[0];
+                    if (tag != tagName_2)
+                        throw new ContentLoadException($"Element {elements[id].internalName} has a malformed reaction! (Tag mismatch: {tagName_2}, {tag})");
+
+                    out_2 = -1;
+                }
+                else
+                {
+                    preTagOut_2 = "";
+                    postTagOut_2 = "";
+                    out_2 = elementsByName[reaction.Value.outputCell2];
+                }
+
+                //now, we finally generate the reactions.
+                int probability = reaction.Value.probability;
+                for (int x1 = 0; x1 < cellType1.Count; x1++)
+                {
+                    string input_1 = cellType1[x1];
+                    string output_1;
+                    if (out_1 == -1)
+                    {
+                        output_1 = preTagOut_1 + input_1 + postTagOut_1;
+                    }
+                    else if (out_1 == 0)
+                    {
+                        output_1 = "air";
+                    }
+                    else
+                    {
+                        output_1 = elements[out_1].internalName;
+                    }
+                    input_1 = preTag_1 + input_1 + postTag_1;
+                    if (!elementsByName.TryGetValue(input_1, out int i1) || !elementsByName.TryGetValue(output_1, out int o1))
+                        continue;
+
+                    for (int x2 = 0; x2 < cellType2.Count; x2++)
+                    {
+                        string input_2 = cellType2[x2]; 
+                        string output_2;
+                        if (out_2 == -1)
+                        {
+                            output_2 = preTagOut_2 + input_2 + postTagOut_2;
+                        }
+                        else if (out_2 == 0)
+                        {
+                            output_2 = "air";
+                        }
+                        else
+                        {
+                            output_2 = elements[out_2].internalName;
+                        }
+                            input_2 = preTag_2 + input_2 + postTag_2;
+                        if (!elementsByName.TryGetValue(input_2, out int i2) || !elementsByName.TryGetValue(output_2, out int o2))
+                            continue;
+
+                        if (i1 == i2 && o1 == o2)
+                            continue;
+
+                        long key;
+                        if (i1 > i2)
+                        {
+                            key = ((long)i1 << 32) + i2;
+                        }
+                        else
+                        {
+                            key = ((long)i2 << 32) + i1;
+                        }
+                        if (reactions.ContainsKey(key))
+                            continue;
+
+                        Reaction newReaction = new Reaction() { outputCell1 = o1, outputCell2 = o2, probability = probability };
+                        reactions.Add(key, newReaction);
+                    }
+                }
+            }
+        }
+    }
+
     public static bool HasReaction(in int actorElement, in int targetElement)
     {
         if (actorElement > targetElement)
         {
-            long key = actorElement << 32 + targetElement;
+            long key = ((long)actorElement << 32) + targetElement;
             return reactions.ContainsKey(key);
         }
         else
         {
-            long key = targetElement << 32 + actorElement;
+            long key = ((long)targetElement << 32) + actorElement;
             return reactions.ContainsKey(key);
         }
     }
@@ -185,11 +365,16 @@ public static class ElementManager
 
     public static void AddToTag(int element, string tag)
     {
-        if (!elementsByTag.TryGetValue(tag, out HashSet<int> tagSet))
+        string[] tags = tag.Split(',');
+        for (int i = 0; i < tags.Length; i++)
         {
-            tagSet = new HashSet<int>();
-            elementsByTag.Add(tag, tagSet);
+            string stripTag = tags[i].Trim().Split('[')[1].Split(']')[0];
+            if (!elementsByTag.TryGetValue(stripTag, out HashSet<int> tagSet))
+            {
+                tagSet = new HashSet<int>();
+                elementsByTag.Add(stripTag, tagSet);
+            }
+            tagSet.Add(element);
         }
-        tagSet.Add(element);
     }
 }

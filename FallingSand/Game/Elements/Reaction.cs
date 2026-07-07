@@ -8,20 +8,17 @@ namespace FallingSand.Game.Elements;
 public struct Reaction
 {
     public int probability;
-    public string cellType1;
-    public string cellType2;
+    public int outputCell1;
+    public int outputCell2;
+}
+public struct ReactionValue
+{
+    public int probability;
     public string outputCell1;
     public string outputCell2;
 }
-
 public struct ReactionKey
 {
-    public int cellType1;
-    public int cellType2;
-    public override readonly int GetHashCode()
-    {
-        int hashX = cellType1.GetHashCode();
-        int hashY = cellType2.GetHashCode();
-        return HashCode.Combine(Math.Min(hashX, hashY), Math.Max(hashX, hashY));
-    }
+    public string cellType1;
+    public string cellType2;
 }

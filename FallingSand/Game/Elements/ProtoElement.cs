@@ -15,8 +15,6 @@ public class ProtoElement : FinishedElement
 
     public bool finishedConstruction = false;
 
-    public Dictionary<ReactionKey, Reaction> reactions;
-
     public bool def_parent = false;
     public bool def_inheritReactions = false;
     public bool def_tags = false;
@@ -31,11 +29,6 @@ public class ProtoElement : FinishedElement
     public bool def_liquid_dispersion = false;
     public bool def_liquid_inertialResistance = false;
     public bool def_liquid_friction = false;
-
-    public ProtoElement()
-    {
-        reactions = new Dictionary<ReactionKey, Reaction>();
-    }
 
     public FinishedElement Finish()
     {
@@ -53,6 +46,13 @@ public class ProtoElement : FinishedElement
         element.liquid_dispersion = liquid_dispersion;
         element.liquid_inertialResistance = liquid_inertialResistance;
         element.liquid_friction = liquid_friction;
+
+        foreach (var react in reactions)
+        {
+            if (!element.reactions.ContainsKey(react.Key))
+                element.reactions.Add(react.Key, react.Value);
+        }
+
         finishedConstruction = true;
 
         return element;
@@ -101,6 +101,29 @@ public class ProtoElement : FinishedElement
         element.liquid_dispersion = def_liquid_dispersion ? liquid_dispersion : parentElement.liquid_dispersion;
         element.liquid_inertialResistance = def_liquid_inertialResistance ? liquid_inertialResistance : parentElement.liquid_inertialResistance;
         element.liquid_friction = def_liquid_friction ? liquid_friction : parentElement.liquid_friction;
+
+        foreach (var react in reactions)
+        {
+            if (!element.reactions.ContainsKey(react.Key))
+                element.reactions.Add(react.Key, react.Value);
+        }
+        if (inheritReactions)
+        {
+            foreach (var react in parentElement.reactions)
+            {
+                ReactionKey key = react.Key;
+                if (key.cellType1 == parentElement.internalName)
+                {
+                    key.cellType1 = element.internalName;
+                }
+                if (key.cellType2 == parentElement.internalName)
+                {
+                    key.cellType2 = element.internalName;
+                }
+                if (!element.reactions.ContainsKey(key))
+                    element.reactions.Add(key, react.Value);
+            }
+        }
 
         finishedConstruction = true;
 
