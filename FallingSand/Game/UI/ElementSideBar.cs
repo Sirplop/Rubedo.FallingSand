@@ -58,13 +58,11 @@ public class ElementSideBar
     private void CreateElementButton(Horizontal horz, int element, WorldState state)
     {
         Panel panel = new Panel(32, 48);
-        Button button = new Button();
-
-        button.OnReleased += (b) =>
+        Button button = panel.AddButton((b) =>
         {
             state.selectedElement = element;
             state.leftClickCondition.Consume();
-        };
+        });
 
         button.OnPressed += (b) =>
         {
@@ -79,13 +77,11 @@ public class ElementSideBar
         button.AddChild(image);
         //button.AddChild(new SelectableTintSet(image, 1f));
 
-        FontSystem font = Assets.GetFont("fs-default");
-        Label text = new Label(font, ElementManager.internalName[element], Color.White, 12);
+        Label text = panel.AddLabel(ElementManager.internalName[element], Color.White, 12, "fs-default");
+
         text.MaxSize = new Vector2(64, -1);
         text.Anchor = Anchor.BottomLeft;
         text.Offset = new Vector2(0, 4);
-        panel.AddChild(button);
-        panel.AddChild(text);
 
         horz.AddChild(panel);
     }

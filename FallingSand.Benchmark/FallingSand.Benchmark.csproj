@@ -1,0 +1,52 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <OutputType>Exe</OutputType>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="BenchmarkDotNet" Version="0.15.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\FallingSand\FallingSand.csproj" />
+  </ItemGroup>
+
+  <!-- Make the FallingSand ContentBuilder available to the temporary copy BenchmarkDotNet creates.
+       This does NOT modify the FallingSand project; it only ensures the compiler and helpers are present
+       when the temp project builds and therefore allows the content compiler to produce the runtime content
+       next to the benchmark binaries. -->
+  <ItemGroup>
+    <None Include="..\FallingSand\ContentBuilder\**\*">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
+  <Target Name="RestoreDotnetTools" BeforeTargets="Restore">
+    <Message Text="Restoring dotnet tools" Importance="High" />
+    <Exec Command="dotnet tool restore" />
+  </Target>
+
+  <!-- Run the content compiler during build of the benchmark project (and thus during BenchmarkDotNet's
+       temporary build). Guarded to only run when the compiler binary exists in the expected location. -->
+  <Target Name="BuildContent" AfterTargets="Build">
+    <PropertyGroup>
+      <_FallingSandRoot>$(MSBuildThisFileDirectory)..\FallingSand\</_FallingSandRoot>
+      <_CompilerPath>$(_FallingSandRoot)ContentBuilder\Rubedo.Compiler.exe</_CompilerPath>
+    </PropertyGroup>
+
+    <Message Text="Attempting to run content compiler: $(_CompilerPath) -> $(TargetDir)" Importance="High" Condition="Exists('$(_CompilerPath)')" />
+    <Exec Command="$(_CompilerPath) $(_FallingSandRoot) $(TargetDir) textures"
+          WorkingDirectory="$(_FallingSandRoot)ContentBuilder"
+          Condition="Exists('$(_CompilerPath)')" />
+
+    <Error Text="Rubedo.Compiler.exe not found at $(_CompilerPath). Build FallingSand or place ContentBuilder next to the repo so benchmarks can compile content."
+           Condition="!Exists('$(_CompilerPath)')" />
+  </Target>
+
+  <PropertyGroup>
+    <DisableFastUpToDateCheck>true</DisableFastUpToDateCheck>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+</Project>
