@@ -77,13 +77,9 @@ public class WorldChunk
         color = new Color[indexSize]; 
         hp = new CellHP[indexSize];
         burnFireType = new int[indexSize];
+        burningIntensity = new byte[indexSize];
 
-#if USE_DOUBLE_MWF_BUFFER
-        movedWithFrame1 = new bool[indexSize];
-        movedWithFrame2 = new bool[indexSize];
-#else
         movedWithFrame = new bool[indexSize];
-#endif
 
         renderRect = new Rectangle(chunkX, chunkY, size, size);
 
@@ -105,52 +101,21 @@ public class WorldChunk
     bool flip = true;
     private void ResetMovedWithFrame()
     {
-#if USE_DOUBLE_MWF_BUFFER
-        if (frameFlip)
-        {
-            for (int i = 0; i < indexSize; i++)
-            {
-                movedWithFrame1[i] = false;
-            }
-        }
-        else
-        {
-            for (int i = 0; i < indexSize; i++)
-            {
-                movedWithFrame2[i] = false;
-            }
-        }
-#else
         for (int i = 0; i < indexSize; i++)
         {
             movedWithFrame[i] = false;
         }
-#endif
     }
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public bool MovedWithFrame(int index)
     {
-#if USE_DOUBLE_MWF_BUFFER
-        if (frameFlip)
-            return movedWithFrame2[index];
-        else
-            return movedWithFrame1[index];
-#else
         return movedWithFrame[index];
-#endif
     }
 
     public void MultithreadSetup(SandWorld matrix)
     {
         gravity = matrix.gravity;
-#if USE_DOUBLE_MWF_BUFFER
-        movedWithFrameReset?.Wait();
-        frameFlip = !frameFlip;
-        movedWithFrameReset = new Task(ResetMovedWithFrame);
-        movedWithFrameReset.Start();
-#else
         ResetMovedWithFrame();
-#endif
 
         flip = !flip;
 

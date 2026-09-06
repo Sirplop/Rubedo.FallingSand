@@ -1339,7 +1339,7 @@ public static class CellBehaviour
         return false;
     }
 
-    public static void TryIgniteNeighbors(in WorldChunk caller, in int x, in int y, in int fireType)
+    public static void TryIgniteNeighbors(in WorldChunk caller, in int x, in int y, in int fireType, in byte intensity)
     {
         byte fireTemp = ElementManager.fire_temperature[fireType];
 
@@ -1362,7 +1362,7 @@ public static class CellBehaviour
                     continue; // this fire isn't hot enough to catch this fuel at all
 
                 int catchChance = Rubedo.Lib.Math.Clamp(tempMargin, 1, 100);
-                if (caller.chunkRNG.Range(0f, 100f) < catchChance * 0.04)
+                if (caller.chunkRNG.Range(0f, 100f) < catchChance * 0.1 * intensity)
                 {
                     containing.burnFireType[nID] = fireType;
                     containing.ThreadEnvelop(nID);
@@ -1370,7 +1370,7 @@ public static class CellBehaviour
             }
         }
     }
-    public static void TryIgniteNeighborsSameChunk(in WorldChunk caller, in int x, in int y, in int fireType)
+    public static void TryIgniteNeighborsSameChunk(in WorldChunk caller, in int x, in int y, in int fireType, in byte intensity)
     {
         byte fireTemp = ElementManager.fire_temperature[fireType];
 
@@ -1392,7 +1392,7 @@ public static class CellBehaviour
                 continue; // this fire isn't hot enough to catch this fuel at all
 
             int catchChance = Rubedo.Lib.Math.Clamp(tempMargin, 1, 100);
-            if (caller.chunkRNG.Range(0f, 100f) < catchChance * 0.04)
+            if (caller.chunkRNG.Range(0f, 100f) < catchChance * 0.1 * intensity)
             {
                 caller.burnFireType[nID] = fireType;
                 caller.ThreadEnvelop(nID);
@@ -1434,19 +1434,22 @@ public static class CellBehaviour
         {
             if (containing.element[cellID] != ElementManager.EMPTY)
                 return;
-            containing.parentMatrix.SpawnCell(fireType, containing, cellID);
+            if (containing.parentMatrix.SpawnCell(fireType, containing, cellID))
+                containing.SetMovedWithFrame(cellID);
         }
         if (caller.TryGetCell(x + 1, y, out containing, out cellID))
         {
             if (containing.element[cellID] != ElementManager.EMPTY)
                 return;
-            containing.parentMatrix.SpawnCell(fireType, containing, cellID);
+            if (containing.parentMatrix.SpawnCell(fireType, containing, cellID))
+                containing.SetMovedWithFrame(cellID);
         }
         if (caller.TryGetCell(x - 1, y, out containing, out cellID))
         {
             if (containing.element[cellID] != ElementManager.EMPTY)
                 return;
-            containing.parentMatrix.SpawnCell(fireType, containing, cellID);
+            if (containing.parentMatrix.SpawnCell(fireType, containing, cellID))
+                containing.SetMovedWithFrame(cellID);
         }
     }
     public static void TrySpawnFlameAroundSameChunk(in WorldChunk caller, in int x, in int y, in int fireType)
@@ -1454,11 +1457,114 @@ public static class CellBehaviour
         int upID = caller.GetCellIndex(x, y + 1);
         int leftID = caller.GetCellIndex(x - 1, y);
         int rightID = caller.GetCellIndex(x + 1, y);
-        if (caller.element[upID] == ElementManager.EMPTY)
-            caller.parentMatrix.SpawnCell(fireType, caller, in upID);
-        if (caller.element[leftID] == ElementManager.EMPTY)
-            caller.parentMatrix.SpawnCell(fireType, caller, in leftID);
-        if (caller.element[rightID] == ElementManager.EMPTY)
-            caller.parentMatrix.SpawnCell(fireType, caller, in rightID);
+        if (caller.element[upID] == ElementManager.EMPTY && 
+            caller.parentMatrix.SpawnCell(fireType, caller, in upID))
+        {
+            caller.SetMovedWithFrame(upID);
+        }
+        if (caller.element[leftID] == ElementManager.EMPTY &&
+            caller.parentMatrix.SpawnCell(fireType, caller, in leftID))
+        {
+            caller.SetMovedWithFrame(leftID);
+        }
+        if (caller.element[rightID] == ElementManager.EMPTY &&
+            caller.parentMatrix.SpawnCell(fireType, caller, in rightID))
+        {
+            caller.SetMovedWithFrame(rightID);
+        }
+    }
+    public static void UpdateFireIntensity(in WorldChunk caller, in int x, in int y, in int cellID, in int fireType)
+    {
+        int burningNeighbors = 0; //total intensity of neighbors
+        int airNeighbors = 0; //number of empty neighbors
+        bool requiresAir = ElementManager.fire_requiresAir[fireType];
+
+        for (int i = 0; i < Neighbors8.Length; i++)
+        {
+            (int dx, int dy) = Neighbors8[i];
+            if (!caller.TryGetCell(x + dx, y + dy, out WorldChunk containing, out int nID))
+                continue;
+
+            if (requiresAir && containing.element[nID] == ElementManager.EMPTY)
+            {
+                airNeighbors++;
+                continue;
+            }
+            burningNeighbors += containing.burningIntensity[nID];
+        }
+
+        int avgIntensity = (burningNeighbors / 8);
+        byte ourIntensity = caller.burningIntensity[cellID];
+
+        // chance to gain a point of intensity this tick
+        int gainChance = ElementManager.FIRE_INTENSITY_BASE_GAIN_CHANCE
+                       + avgIntensity * ElementManager.FIRE_INTENSITY_GAIN_PER_NEIGHBOR_INTENSITY;
+        if (requiresAir)
+            gainChance += airNeighbors * ElementManager.FIRE_INTENSITY_GAIN_PER_AIR_NEIGHBOR;
+
+        if (ourIntensity < ElementManager.FIRE_MAX_INTENSITY && caller.chunkRNG.Percent() < gainChance)
+            ourIntensity++;
+
+        // chance to lose a point of intensity this tick
+        int loseChance = ElementManager.FIRE_INTENSITY_BASE_LOSE_CHANCE;
+        if (requiresAir)
+            loseChance += (8 - airNeighbors) * ElementManager.FIRE_INTENSITY_LOSE_PER_MISSING_AIR;
+
+        if (ourIntensity > 0 && caller.chunkRNG.Percent() < loseChance)
+            ourIntensity--;
+
+        caller.burningIntensity[cellID] = ourIntensity;
+    }
+
+    public static void UpdateFireIntensitySameChunk(in WorldChunk caller, in int x, in int y, in int cellID, in int fireType)
+    {
+        int burningNeighbors = 0; //total intensity of neighbors
+        int airNeighbors = 0; //number of empty neighbors
+        bool requiresAir = ElementManager.fire_requiresAir[fireType];
+        if (requiresAir)
+        {
+            for (int i = 0; i < Neighbors8.Length; i++)
+            {
+                (int dx, int dy) = Neighbors8[i];
+                int nID = caller.GetCellIndex(x + dx, y + dy);
+                if (caller.element[nID] == ElementManager.EMPTY)
+                {
+                    airNeighbors++;
+                    continue;
+                }
+                burningNeighbors += caller.burningIntensity[nID];
+            }
+        }
+        else
+        {
+            for (int i = 0; i < Neighbors8.Length; i++)
+            {
+                (int dx, int dy) = Neighbors8[i];
+                int nID = caller.GetCellIndex(x + dx, y + dy);
+                burningNeighbors += caller.burningIntensity[nID];
+            }
+        }
+
+        int avgIntensity = (burningNeighbors / 8);
+        byte ourIntensity = caller.burningIntensity[cellID];
+
+        // chance to gain a point of intensity this tick
+        int gainChance = ElementManager.FIRE_INTENSITY_BASE_GAIN_CHANCE
+                       + avgIntensity * ElementManager.FIRE_INTENSITY_GAIN_PER_NEIGHBOR_INTENSITY;
+        if (requiresAir)
+            gainChance += airNeighbors * ElementManager.FIRE_INTENSITY_GAIN_PER_AIR_NEIGHBOR;
+
+        if (ourIntensity < ElementManager.FIRE_MAX_INTENSITY && caller.chunkRNG.Percent() < gainChance)
+            ourIntensity++;
+
+        // chance to lose a point of intensity this tick
+        int loseChance = ElementManager.FIRE_INTENSITY_BASE_LOSE_CHANCE;
+        if (requiresAir)
+            loseChance += (8 - airNeighbors) * ElementManager.FIRE_INTENSITY_LOSE_PER_MISSING_AIR;
+
+        if (ourIntensity > 0 && caller.chunkRNG.Percent() < loseChance)
+            ourIntensity--;
+
+        caller.burningIntensity[cellID] = ourIntensity;
     }
 }

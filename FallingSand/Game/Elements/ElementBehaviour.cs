@@ -10,21 +10,25 @@ public static class ElementBehaviour
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static bool IsNotBorderCellPowder(in int x, in int y, in int chunkSize, in int max_speed)
     {
+        //powder can move left and right 1, but a large down distance.
         return x > 1 && x < chunkSize - 2 && y >= max_speed && y < chunkSize - 2;
     }
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static bool IsNotBorderCellLiquid(in int x, in int y, in int chunkSize, in int max_speed, in int dispersion)
     {
+        //liquid cares about being able to move a large horizontal and vertical distance, but not up.
         return x > dispersion + 1 && x < chunkSize - dispersion - 1 && y >= max_speed && y < chunkSize - 2;
     }
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static bool IsNotBorderCellGas(in int x, in int y, in int chunkSize)
     {
+        //gas can move up, left, and right by 1, so it does not care about beneath itself.
         return x > 1 && x < chunkSize - 2 && y < chunkSize - 1 && y > 0;
     }
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static bool IsNotBorderCellFire(in int x, in int y, in int chunkSize)
     {
+        //fire cares about its immediate halo.
         return x > 1 && x < chunkSize - 2 && y > 1 && y < chunkSize - 2;
     }
 
@@ -226,7 +230,7 @@ public static class ElementBehaviour
                 caller.hp[cellID] = life;
             }
 
-            CellBehaviour.TryIgniteNeighborsSameChunk(in caller, in x, in y, fireType);
+            CellBehaviour.TryIgniteNeighborsSameChunk(in caller, in x, in y, in fireType, 10);
 
             if (caller.chunkRNG.Flip())
             {
@@ -270,7 +274,7 @@ public static class ElementBehaviour
                 caller.hp[cellID] = life;
             }
 
-            CellBehaviour.TryIgniteNeighbors(in caller, in x, in y, fireType);
+            CellBehaviour.TryIgniteNeighbors(in caller, in x, in y, in fireType, 10);
 
             WorldChunk callerNonRef = caller;
 
@@ -326,10 +330,13 @@ public static class ElementBehaviour
         caller.color[cellID] = new Color((byte)(c.R * d), (byte)(c.G * d), (byte)(c.B * d), c.A);
         */
 
-        if (IsNotBorderCellFire(in x, in y, in caller.size))
+        if (IsNotBorderCellFire(x - caller.chunkX, y - caller.chunkY, in caller.size))
         {
             int fireType = caller.burnFireType[cellID];
-            CellBehaviour.TryIgniteNeighborsSameChunk(in caller, in x, in y, in fireType);
+            byte intensity = caller.burningIntensity[cellID];
+
+            CellBehaviour.UpdateFireIntensitySameChunk(in caller, in x, in y, in cellID, in fireType);
+            CellBehaviour.TryIgniteNeighborsSameChunk(in caller, in x, in y, in fireType, in intensity);
 
             if (caller.chunkRNG.Percent() < ElementManager.FIRE_SPAWN_CHANCE)
                 CellBehaviour.TrySpawnFlameAroundSameChunk(in caller, in x, in y, in fireType);
@@ -337,7 +344,10 @@ public static class ElementBehaviour
         else
         {
             int fireType = caller.burnFireType[cellID];
-            CellBehaviour.TryIgniteNeighbors(in caller, in x, in y, in fireType);
+            byte intensity = caller.burningIntensity[cellID];
+
+            CellBehaviour.UpdateFireIntensity(in caller, in x, in y, in cellID, in fireType);
+            CellBehaviour.TryIgniteNeighbors(in caller, in x, in y, in fireType, in intensity);
 
             if (caller.chunkRNG.Percent() < ElementManager.FIRE_SPAWN_CHANCE)
                 CellBehaviour.TrySpawnFlameAround(in caller, in x, in y, in fireType);

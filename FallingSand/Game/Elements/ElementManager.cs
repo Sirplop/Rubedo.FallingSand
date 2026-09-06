@@ -34,6 +34,13 @@ public static class ElementManager
     public const byte FIRE_EXTINQUISH_CHANCE = 25; //chance per frame fire is extinguished when buried.
     public const byte FIRE_IGNITE_CHANCE = 16;
 
+    public const byte FIRE_MAX_INTENSITY = 15;
+    public const byte FIRE_INTENSITY_BASE_GAIN_CHANCE = 16;             // % per tick to gain intensity
+    public const byte FIRE_INTENSITY_GAIN_PER_AIR_NEIGHBOR = 12;        // % added per adjacent empty cell
+    public const byte FIRE_INTENSITY_GAIN_PER_NEIGHBOR_INTENSITY = 2;  // % added per avg point of neighbor intensity
+    public const byte FIRE_INTENSITY_BASE_LOSE_CHANCE = 6;             // % per tick, floor chance to cool off
+    public const byte FIRE_INTENSITY_LOSE_PER_MISSING_AIR = 6;         // % added per non-empty (smothering) neighbor
+
     public static bool Loaded { get; private set; }
 
     public static Dictionary<long, Reaction> reactions;
