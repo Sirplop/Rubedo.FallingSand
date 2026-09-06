@@ -19,6 +19,7 @@ using Rubedo.UI.Layout;
 using Rubedo.UI.Text;
 using System;
 using System.Collections.Generic;
+using static FallingSand.Game.World.WorldChunk;
 
 namespace FallingSand.Game.States;
 
@@ -169,11 +170,13 @@ public class WorldState : GameState
                 }
             }
         }
+        Vector2 mouse = InputManager.MouseWorldPosition(MainCamera);
+
+        shapes.DrawBox(mouse.X - brushSize, mouse.Y - brushSize, brushSize * 2, brushSize * 2, ElementManager.colorCode[selectedElement], 0.5f);
         shapes.End();
 
         if (drawPosition && mouseVertical != null && !mouseVertical.IsDestroyed)
         {
-            Vector2 mouse = InputManager.MouseWorldPosition(MainCamera);
             int x = Rubedo.Lib.Math.FloorToInt(mouse.X);
             int y = Rubedo.Lib.Math.FloorToInt(mouse.Y);
             WorldChunk chunk = this.world.GetChunk(x, y);
@@ -203,11 +206,11 @@ public class WorldState : GameState
 
             if (drawCellDetails && elementID != ElementManager.EMPTY)
             {
-                Vector2 velocity = chunk.velocity[cellID];
+                Velocity velocity = chunk.velocity[cellID];
                 WorldChunk.Moving moving = chunk.moving[cellID];
 
                 world.Text += $"\nVelocity: {velocity.ToNiceString("0.00")}" +
-                    $"\nFreefalling: {moving.isMoving}, {moving.movingCount}";
+                    $"\nFreefalling: {moving.IsMoving}, {moving.MovingCount}";
             }
         }
     }

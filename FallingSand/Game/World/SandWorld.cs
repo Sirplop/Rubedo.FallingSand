@@ -2,6 +2,7 @@
 
 using FallingSand.Game.Elements;
 using Microsoft.Xna.Framework;
+using Microsoft.Xna.Framework.Graphics;
 using Rubedo;
 using Rubedo.Components;
 using Rubedo.Graphics;
@@ -34,6 +35,8 @@ public class SandWorld : RenderableComponent
     private int worldMaxX;
     private int worldMaxY;
     public Rectangle WorldRect => new Rectangle(worldMinX, worldMinY, worldMaxX - worldMinX, worldMaxY - worldMinY);
+
+    protected override Texture2D MaterialTexture => null; //this does not render things itself.
 
     public int chunkSize;
     public int chunksPerRegion;
@@ -251,28 +254,50 @@ public class SandWorld : RenderableComponent
 
         chunk.element[cellID] = element;
         ref WorldChunk.Moving moving = ref chunk.moving[cellID];
-        moving.isMoving = true;
-        moving.movingCount = 0; //naughty naughty, mutating a struct...
+        moving.IsMoving = true;
+        moving.MovingCount = 0; //naughty naughty, mutating a struct...
 
-        chunk.velocity[cellID] = new Vector2(0, 0);
+        chunk.velocity[cellID].Zero();
         chunk.color[cellID] = ElementManager.color[element] * rnd.Range(0.9f, 1.1f);
+        chunk.hp[cellID].Value = ElementManager.hp[element];
+
+        if (ElementManager.typeLookup[element] == ElementManager.Type.FIRE)
+        {
+            chunk.burnFireType[cellID] = element;
+        }
+        else
+        {
+            chunk.burnFireType[cellID] = ElementManager.EMPTY;
+        }
+
         chunk.ThreadEnvelop(x, y);
         chunk.RenderRect.Union(x, y);
         return true;
     }
 
-    public bool SpawnCell(int element, WorldChunk chunk, int cellID)
+    public bool SpawnCell(in int element, in WorldChunk chunk, in int cellID)
     {
-        if (chunk.element[cellID] != 0)
+        if (chunk.element[cellID] != ElementManager.EMPTY)
             return false;
 
         chunk.element[cellID] = element;
         ref WorldChunk.Moving moving = ref chunk.moving[cellID];
-        moving.isMoving = true;
-        moving.movingCount = 0; //naughty naughty, mutating a struct...
+        moving.IsMoving = true;
+        moving.MovingCount = 0; //naughty naughty, mutating a struct...
 
-        chunk.velocity[cellID] = new Vector2(0, 0);
+        chunk.velocity[cellID].Zero();
         chunk.color[cellID] = ElementManager.color[element] * rnd.Range(0.9f, 1.1f);
+        chunk.hp[cellID].Value = ElementManager.hp[element];
+
+        if (ElementManager.typeLookup[element] == ElementManager.Type.FIRE)
+        {
+            chunk.burnFireType[cellID] = element;
+        }
+        else
+        {
+            chunk.burnFireType[cellID] = ElementManager.EMPTY;
+        }
+
         chunk.ThreadEnvelop(cellID);
         chunk.RenderRect.Union((cellID / chunkSize) + chunk.chunkY, (cellID % chunkSize) + chunk.chunkX);
         return true;
@@ -294,11 +319,14 @@ public class SandWorld : RenderableComponent
 
         chunk.element[cellID] = 0;
         ref WorldChunk.Moving moving = ref chunk.moving[cellID];
-        moving.isMoving = true;
-        moving.movingCount = 0; //naughty naughty, mutating a struct...
+        moving.IsMoving = true;
+        moving.MovingCount = 0; //naughty naughty, mutating a struct...
 
-        chunk.velocity[cellID] = new Vector2(0, 0);
-        chunk.color[cellID] = ElementManager.color[ElementManager.EMPTY];
+        chunk.velocity[cellID].Zero();
+        chunk.color[cellID] = ElementManager.colorCode[ElementManager.EMPTY];
+        chunk.hp[cellID].Zero();
+        chunk.burnFireType[cellID] = ElementManager.EMPTY;
+
         chunk.ThreadEnvelop(cellID);
         chunk.RenderRect.Union(x, y);
         return true;
@@ -307,11 +335,14 @@ public class SandWorld : RenderableComponent
     {
         chunk.element[cellID] = 0;
         ref WorldChunk.Moving moving = ref chunk.moving[cellID];
-        moving.isMoving = true;
-        moving.movingCount = 0; //naughty naughty, mutating a struct...
+        moving.IsMoving = true;
+        moving.MovingCount = 0; //naughty naughty, mutating a struct...
 
-        chunk.velocity[cellID] = new Vector2(0, 0);
-        chunk.color[cellID] = ElementManager.color[ElementManager.EMPTY];
+        chunk.velocity[cellID].Zero();
+        chunk.color[cellID] = ElementManager.colorCode[ElementManager.EMPTY];
+        chunk.hp[cellID].Zero();
+        chunk.burnFireType[cellID] = ElementManager.EMPTY;
+
         chunk.ThreadEnvelop(cellID);
         chunk.RenderRect.Union((cellID / chunkSize) + chunk.chunkY, (cellID % chunkSize) + chunk.chunkX);
         return true;

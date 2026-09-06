@@ -2,7 +2,7 @@
 	{
 		"internalName": "stone",
 		"cellType": "liquid",
-		"color": "ff666666",
+		"colorCode": "ff666666",
 		"density": 50,
 		"tags": "[corrodible]",
 
@@ -11,6 +11,10 @@
 		"liquid_maxSpeed": 5,
 		"liquid_gravity": 1,
 		"liquid_inertialResistance": 50,
-		"liquid_friction": 40
+		"liquid_friction": 40,
+
+		"graphics": {
+			"color": "ff666666"
+		}
 	}
 ]

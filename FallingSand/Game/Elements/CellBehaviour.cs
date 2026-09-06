@@ -8,6 +8,7 @@ using System.ComponentModel;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Security.Cryptography;
+using static FallingSand.Game.World.WorldChunk;
 
 namespace FallingSand.Game.Elements;
 
@@ -36,6 +37,12 @@ public static class CellBehaviour
         Reaction
     }
 
+    public static readonly (int dx, int dy)[] Neighbors8 =
+    {
+        (-1,-1),(0,-1),(1,-1),
+        (-1, 0),        (1, 0),
+        (-1, 1),(0, 1),(1, 1)
+    };
 
     /// <summary>
     /// Version of CanBeSwapped that guarantees the target and actor are in the same chunk.
@@ -83,7 +90,7 @@ public static class CellBehaviour
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void SwapForDensities(in WorldChunk caller, in int x1, in int y1, ref int actorID, in int x2, in int y2, in int targetID)
     {
-        ref Vector2 velocity = ref caller.velocity[actorID];
+        ref Velocity velocity = ref caller.velocity[actorID];
         velocity.Y *= 0.5f;
         if (caller.chunkRNG.Percent() > 80)
         {
@@ -95,7 +102,7 @@ public static class CellBehaviour
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void SwapForDensities(ref WorldChunk caller, WorldChunk target, int x1, int y1, ref int actorID, int x2, int y2, ref int targetID)
     {
-        ref Vector2 velocity = ref caller.velocity[actorID];
+        ref Velocity velocity = ref caller.velocity[actorID];
         velocity.Y *= 0.5f;
         if (caller.chunkRNG.Percent() > 80)
         {
@@ -108,7 +115,7 @@ public static class CellBehaviour
     #region LIQUID
     public static bool TryMoveSide(ref WorldChunk caller, in int x, in int y, ref int cellID, in int dispersion)
     {
-        Vector2 velocity = caller.velocity[cellID];
+        Velocity velocity = caller.velocity[cellID];
         int dispersionCheck = caller.chunkRNG.Range(1, dispersion);
 
         if (velocity.X != 0)
@@ -208,7 +215,7 @@ public static class CellBehaviour
 
     public static bool TryMoveSideSameChunk(in WorldChunk caller, in int x, in int y, ref int cellID, in int dispersion)
     {
-        Vector2 velocity = caller.velocity[cellID];
+        Velocity velocity = caller.velocity[cellID];
 
         int dispersionCheck = caller.chunkRNG.Range(1, dispersion);
 
@@ -360,16 +367,12 @@ public static class CellBehaviour
     public static bool TryFallSameChunk(in WorldChunk caller, in int cellX, in int cellY, ref int actorID)
     {
         int elementID = caller.element[actorID];
-        ref Vector2 velocity = ref caller.velocity[actorID];
+        ref Velocity velocity = ref caller.velocity[actorID];
 
         float velUpdate = caller.gravity * ElementManager.liquid_gravity[elementID] * Time.FixedDeltaTime * 2;
         int maxSpeed = ElementManager.liquid_maxSpeed[elementID];
         velocity.Y = Rubedo.Lib.Math.Clamp(velocity.Y - velUpdate, -maxSpeed, maxSpeed);
         int yVel = System.Math.Abs(Rubedo.Lib.Math.RoundAwayFromZero(velocity.Y));
-
-        //int yVel = caller.chunkRNG.Range(1, 4);
-
-        //caller.velocity[actorID] = velocity;
 
         int moveY = cellY;
 
@@ -399,7 +402,7 @@ public static class CellBehaviour
     public static bool TryFall(ref WorldChunk caller, in int cellX, in int cellY, ref int actorID)
     {
         int elementID = caller.element[actorID];
-        ref Vector2 velocity = ref caller.velocity[actorID];
+        ref Velocity velocity = ref caller.velocity[actorID];
 
         float velUpdate = caller.gravity * ElementManager.liquid_gravity[elementID] * Time.FixedDeltaTime * 2;
         int maxSpeed = ElementManager.liquid_maxSpeed[elementID];
@@ -437,7 +440,7 @@ public static class CellBehaviour
 
     public static bool TryDiagonalDownSameChunk(in WorldChunk caller, in int cellX, in int cellY, ref int cellID)
     {
-        Vector2 velocity = caller.velocity[cellID];
+        Velocity velocity = caller.velocity[cellID];
 
         int dlID = caller.GetCellIndex(cellX - 1, cellY - 1);
         int drID = dlID + 2;
@@ -525,7 +528,7 @@ public static class CellBehaviour
 
     public static bool TryDiagonalDown(ref WorldChunk caller, int cellX, int cellY, ref int cellID)
     {
-        Vector2 velocity = caller.velocity[cellID];
+        Velocity velocity = caller.velocity[cellID];
 
         bool downLeftExists = caller.TryGetCell(cellX - 1, cellY - 1, out WorldChunk chunkDL, out int dlID);
         bool downRightExists = caller.TryGetCell(cellX + 1, cellY - 1, out WorldChunk chunkDR, out int drID);
@@ -633,7 +636,7 @@ public static class CellBehaviour
 
     public static bool TryDiagonalUp(ref WorldChunk caller, in int x, in int y, ref int actorID)
     {
-        Vector2 velocity = caller.velocity[actorID];
+        Velocity velocity = caller.velocity[actorID];
 
         bool upLeftExists = caller.TryGetCell(x - 1, y + 1, out WorldChunk upLeftChunk, out int upLeft);
         bool upRightExists = caller.TryGetCell(x + 1, y + 1, out WorldChunk upRightChunk, out int upRight);
@@ -715,7 +718,7 @@ public static class CellBehaviour
     }
     public static bool TryDiagonalUpSameChunk(in WorldChunk caller, in int x, in int y, ref int actorID)
     {
-        Vector2 velocity = caller.velocity[actorID];
+        Velocity velocity = caller.velocity[actorID];
 
         int y1 = y + 1;
 
@@ -803,11 +806,12 @@ public static class CellBehaviour
         return false;
     }
 
-    public static bool TryRise(ref WorldChunk caller, int x, int y, ref int actorID)
+    public static bool TryRise(ref WorldChunk caller, in int x, in int y, ref int actorID)
     {
-        if (caller.TryGetCell(x, y + 1, out WorldChunk targetChunk, out int targetID))
+        int nY = y + 1;
+        if (caller.TryGetCell(in x, in nY, out WorldChunk targetChunk, out int targetID))
         {
-            ActResult actRes = ActOnCell(ref caller, targetChunk, x, y, ref actorID, x, y + 1, ref targetID);
+            ActResult actRes = ActOnCell(ref caller, targetChunk, in x, in y, ref actorID, in x, in nY, ref targetID);
             switch (actRes)
             {
                 case ActResult.Move:
@@ -839,7 +843,7 @@ public static class CellBehaviour
     
     public static bool TryMoveSideOne(ref WorldChunk caller, in int x, in int y, ref int actorID)
     {
-        Vector2 velocity = caller.velocity[actorID];
+        Velocity velocity = caller.velocity[actorID];
 
         if (velocity.X != 0)
         {
@@ -923,7 +927,7 @@ public static class CellBehaviour
 
     public static bool TryMoveSideOneSameChunk(in WorldChunk caller, in int x, in int y, ref int actorID)
     {
-        Vector2 velocity = caller.velocity[actorID];
+        Velocity velocity = caller.velocity[actorID];
 
         if (velocity.X != 0)
         {
@@ -1055,7 +1059,7 @@ public static class CellBehaviour
         }
 
         ref WorldChunk.Moving actorMoving = ref caller.moving[actorID];
-        actorMoving.movingCount = 0;
+        actorMoving.MovingCount = 0;
 
         caller.SwapCells(in x1, in y1, in actorID, in x2, in y2, in targetID);
 
@@ -1144,11 +1148,11 @@ public static class CellBehaviour
             case ElementManager.Type.LIQUID:
                 ref WorldChunk.Moving moving = ref caller.moving[actorID];
 
-                if (moving.isMoving) //we've hit something solid
+                if (moving.IsMoving) //we've hit something solid
                 {
-                    Vector2 velocity = caller.velocity[actorID];
+                    Velocity velocity = caller.velocity[actorID];
                     float absY = System.Math.Abs(velocity.Y);
-                    velocity.X = velocity.X > 0 ? absY : -absY;
+                    velocity.X = velocity.X == 0 ? 0 : velocity.X > 0 ? absY : -absY;
                     caller.velocity[actorID] = velocity;
                 }
                 if (CanBeSwapped(in caller, in actorElement, in actorType, in targetElement, in targetType))
@@ -1213,11 +1217,11 @@ public static class CellBehaviour
                 {
                     ref WorldChunk.Moving moving = ref caller.moving[actorID];
 
-                    if (moving.isMoving) //we've hit something solid
+                    if (moving.IsMoving) //we've hit something solid
                     {
-                        Vector2 velocity = caller.velocity[actorID];
+                        Velocity velocity = caller.velocity[actorID];
                         float absY = System.Math.Abs(velocity.Y);
-                        velocity.X = velocity.X > 0 ? absY : -absY;
+                        velocity.X = velocity.X == 0 ? 0 : velocity.X > 0 ? absY : -absY;
                         caller.velocity[actorID] = velocity;
                     }
 
@@ -1275,8 +1279,8 @@ public static class CellBehaviour
         {
             caller.element[actorID] = reaction.outputCell1;
             caller.element[targetID] = reaction.outputCell2;
-            caller.color[actorID] = ElementManager.color[reaction.outputCell1] * caller.chunkRNG.Range(0.9f, 1.1f);
-            caller.color[targetID] = ElementManager.color[reaction.outputCell2] * caller.chunkRNG.Range(0.9f, 1.1f);
+            caller.color[actorID] = ElementManager.colorCode[reaction.outputCell1] * caller.chunkRNG.Range(0.9f, 1.1f);
+            caller.color[targetID] = ElementManager.colorCode[reaction.outputCell2] * caller.chunkRNG.Range(0.9f, 1.1f);
             caller.SetMoving(actorID, reaction.outputCell1);
             caller.SetMoving(targetID, reaction.outputCell2);
             return true;
@@ -1299,8 +1303,8 @@ public static class CellBehaviour
         {
             caller.element[actorID] = reaction.outputCell1;
             targetChunk.element[targetID] = reaction.outputCell2;
-            caller.color[actorID] = ElementManager.color[reaction.outputCell1] * caller.chunkRNG.Range(0.9f, 1.1f);
-            targetChunk.color[targetID] = ElementManager.color[reaction.outputCell2] * caller.chunkRNG.Range(0.9f, 1.1f);
+            caller.color[actorID] = ElementManager.colorCode[reaction.outputCell1] * caller.chunkRNG.Range(0.9f, 1.1f);
+            targetChunk.color[targetID] = ElementManager.colorCode[reaction.outputCell2] * caller.chunkRNG.Range(0.9f, 1.1f);
             caller.SetMoving(actorID, reaction.outputCell1);
             targetChunk.SetMoving(targetID, reaction.outputCell2);
             return true;
@@ -1333,5 +1337,128 @@ public static class CellBehaviour
                 return true;
         }
         return false;
+    }
+
+    public static void TryIgniteNeighbors(in WorldChunk caller, in int x, in int y, in int fireType)
+    {
+        byte fireTemp = ElementManager.fire_temperature[fireType];
+
+        for (int i = 0; i < Neighbors8.Length; i++)
+        {
+            (int dx, int dy) = Neighbors8[i];
+            if (caller.TryGetCell(x + dx, y + dy, out WorldChunk containing, out int nID))
+            {
+                int nElement = containing.element[nID];
+
+                if (nElement == ElementManager.EMPTY || containing.burnFireType[nID] != 0)
+                    continue;
+
+                byte ignitionPoint = ElementManager.fire_temperature[nElement];
+                if (ignitionPoint == 0)
+                    continue; // not flammable
+
+                int tempMargin = fireTemp - ignitionPoint;
+                if (tempMargin <= 0)
+                    continue; // this fire isn't hot enough to catch this fuel at all
+
+                int catchChance = Rubedo.Lib.Math.Clamp(tempMargin, 1, 100);
+                if (caller.chunkRNG.Range(0f, 100f) < catchChance * 0.04)
+                {
+                    containing.burnFireType[nID] = fireType;
+                    containing.ThreadEnvelop(nID);
+                }
+            }
+        }
+    }
+    public static void TryIgniteNeighborsSameChunk(in WorldChunk caller, in int x, in int y, in int fireType)
+    {
+        byte fireTemp = ElementManager.fire_temperature[fireType];
+
+        for (int i = 0; i < Neighbors8.Length; i++)
+        {
+            (int dx, int dy) = Neighbors8[i];
+            int nID = caller.GetCellIndex(x + dx, y + dy);
+            int nElement = caller.element[nID];
+
+            if (nElement == ElementManager.EMPTY || caller.burnFireType[nID] != 0)
+                continue;
+
+            byte ignitionPoint = ElementManager.fire_temperature[nElement];
+            if (ignitionPoint == 0)
+                continue; // not flammable
+
+            int tempMargin = fireTemp - ignitionPoint;
+            if (tempMargin <= 0)
+                continue; // this fire isn't hot enough to catch this fuel at all
+
+            int catchChance = Rubedo.Lib.Math.Clamp(tempMargin, 1, 100);
+            if (caller.chunkRNG.Range(0f, 100f) < catchChance * 0.04)
+            {
+                caller.burnFireType[nID] = fireType;
+                caller.ThreadEnvelop(nID);
+            }
+        }
+    }
+    public static bool FireIsExtinguished(in WorldChunk caller, in int x, in int y)
+    {
+        for (int i = 0; i < Neighbors8.Length; i++)
+        {
+            (int dx, int dy) = Neighbors8[i];
+            if (caller.TryGetCell(x + dx, y + dy, out WorldChunk containing, out int nID))
+            {
+                int nElement = containing.element[nID];
+                if (nElement == ElementManager.EMPTY)
+                    return false; // we have air!
+            }
+        }
+        return caller.chunkRNG.Percent() < ElementManager.FIRE_EXTINQUISH_CHANCE;
+    }
+    public static bool FireIsExtinguishedSameChunk(in WorldChunk caller, in int x, in int y)
+    {
+        for (int i = 0; i < Neighbors8.Length; i++)
+        {
+            (int dx, int dy) = Neighbors8[i];
+            int nID = caller.GetCellIndex(x + dx, y + dy);
+            int nElement = caller.element[nID];
+
+            if (nElement == ElementManager.EMPTY)
+                return false; // we have air!
+        }
+        return caller.chunkRNG.Percent() < ElementManager.FIRE_EXTINQUISH_CHANCE;
+    }
+
+    //try to spawn fire left, right, and up
+    public static void TrySpawnFlameAround(in WorldChunk caller, in int x, in int y, in int fireType)
+    {
+        if (caller.TryGetCell(x, y + 1, out WorldChunk containing, out int cellID))
+        {
+            if (containing.element[cellID] != ElementManager.EMPTY)
+                return;
+            containing.parentMatrix.SpawnCell(fireType, containing, cellID);
+        }
+        if (caller.TryGetCell(x + 1, y, out containing, out cellID))
+        {
+            if (containing.element[cellID] != ElementManager.EMPTY)
+                return;
+            containing.parentMatrix.SpawnCell(fireType, containing, cellID);
+        }
+        if (caller.TryGetCell(x - 1, y, out containing, out cellID))
+        {
+            if (containing.element[cellID] != ElementManager.EMPTY)
+                return;
+            containing.parentMatrix.SpawnCell(fireType, containing, cellID);
+        }
+    }
+    public static void TrySpawnFlameAroundSameChunk(in WorldChunk caller, in int x, in int y, in int fireType)
+    {
+        int upID = caller.GetCellIndex(x, y + 1);
+        int leftID = caller.GetCellIndex(x - 1, y);
+        int rightID = caller.GetCellIndex(x + 1, y);
+        if (caller.element[upID] == ElementManager.EMPTY)
+            caller.parentMatrix.SpawnCell(fireType, caller, in upID);
+        if (caller.element[leftID] == ElementManager.EMPTY)
+            caller.parentMatrix.SpawnCell(fireType, caller, in leftID);
+        if (caller.element[rightID] == ElementManager.EMPTY)
+            caller.parentMatrix.SpawnCell(fireType, caller, in rightID);
     }
 }

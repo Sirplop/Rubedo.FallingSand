@@ -2,22 +2,34 @@
 	{
 		"internalName": "dirt",
 		"cellType": "liquid",
-		"color": "ff513308",
+		"colorCode": "ff513308",
 		"density": 10,
+		"hp": 3,
 		"tags": "[sand_other], [corrodible]",
 
 		"liquid_isSand": true,
 		"liquid_maxSpeed": 5,
 		"liquid_gravity": 1,
 		"liquid_inertialResistance": 50,
-		"liquid_friction": 40
+		"liquid_friction": 40,
+
+		"graphics": {
+			"color": "ff513308"
+		}
 	},
 	{
 		"parent": "dirt",
 		"internalName": "coal",
 		"tags": "[sand_other], [corrodible], [burnable], [alchemy]",
-		"color": "ff231f1a",
+		"colorCode": "ff231f1a",
 		"density": 30,
-		"liquid_inertialResistance": 85
+		"liquid_inertialResistance": 85,
+
+		"fire_temperature": 100,
+		"fire_requiresAir": true,
+
+		"graphics": {
+			"color": "ff231f1a"
+		}
 	}
 ]

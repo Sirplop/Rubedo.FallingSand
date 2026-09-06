@@ -1,7 +1,10 @@
 ﻿using FallingSand.Game.World;
+using Loyc;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Content;
+using Microsoft.Xna.Framework.Graphics;
 using Rubedo;
+using Rubedo.Lib;
 using Rubedo.Resources;
 using System;
 using System.Collections.Generic;
@@ -20,11 +23,16 @@ public static class ElementManager
         EMPTY = 0,
         LIQUID = 1,
         GAS = 2,
-        PHYSICS_SOLID = 3,
+        FIRE = 3,
+        PHYSICS_SOLID = 4,
     }
 
     public const int FREE_FALLING_THRESHOLD = 5; //number of frames the pixel must not move to reset free falling.
     public const int EMPTY = 0; //makes comparing to element 0 more obvious.
+
+    public const byte FIRE_SPAWN_CHANCE = 25; //chance fire spawns a fire cell above itself if it's empty.
+    public const byte FIRE_EXTINQUISH_CHANCE = 25; //chance per frame fire is extinguished when buried.
+    public const byte FIRE_IGNITE_CHANCE = 16;
 
     public static bool Loaded { get; private set; }
 
@@ -37,19 +45,31 @@ public static class ElementManager
 
     public static string[][] tags;
 
-    public static Type[] typeLookup;
-    public static string[]  internalName;
-    public static Color[]   color;
-    public static float[]   density;
+    public static Type[] typeLookup;            //type of this material
+    public static string[]  internalName;       //internal name for translation
+    public static Color[]   colorCode;          //the unique color id of this material
+    public static float[]   density;            //density of this material
+    public static float[]   hp;                 //base health of this material
+    public static int[]     hardness;            //hardness of this material
 
-    public static bool[]    liquid_isStatic; //does this particle move
-    public static bool[]    liquid_isSand; //is this particle a powder, aka only moves downwards?
+    public static Color[] color;                //Actual color of this material when spawned.
+    public static string[] texture;             //Default texture for a material.
+    public static bool[] isGradient;            //is this a gradient texture?
+    public static Color[][] gradient_color;     //some elements change color over time, this is their gradient maps.
 
-    public static byte[]     liquid_maxSpeed; //how fast can a single pixel go?
-    public static byte[]     liquid_gravity; //vertical acceleration rate
-    public static byte[]     liquid_dispersion; //how far the particle looks left and right to move to the side
-    public static byte[]     liquid_inertialResistance; //[0, 100] how likely is this element to become freefalling when something passes by?
-    public static byte[]     liquid_friction; //how fast does this element slow down?
+    public static bool[]    liquid_isStatic;    //does this particle move
+    public static bool[]    liquid_isSand;      //is this particle a powder, aka only moves downwards?
+
+    public static byte[]    liquid_maxSpeed;            //how fast can a single pixel go?
+    public static byte[]    liquid_gravity;             //vertical acceleration rate
+    public static byte[]    liquid_dispersion;          //how far the particle looks left and right to move to the side
+    public static byte[]    liquid_inertialResistance;  //[0, 100] how likely is this element to become freefalling when something passes by?
+    public static byte[]    liquid_friction;            //how fast does this element slow down?
+
+    public static byte[]    fire_temperature;           //0 is fireproof. Difference between fire and fuel's value determines spread speed.
+    public static bool[]    fire_requiresAir;           //does this material require air to burn?
+
+    public static int[]     fire_fizzle;                //what a fire cell becomes at end of life
 
     private static List<ProtoElement> elementPrototypes;
 
@@ -79,8 +99,17 @@ public static class ElementManager
         typeLookup = new Type[count];
         tags = new string[count][];
         internalName = new string[count];
-        color = new Color[count];
+        colorCode = new Color[count];
+
         density = new float[count];
+        hp = new float[count];
+        hardness = new int[count];
+
+        color = new Color[count];
+        texture = new string[count];
+        isGradient = new bool[count];
+        gradient_color = new Color[count][];
+
         liquid_isStatic = new bool[count];
         liquid_isSand = new bool[count];
         liquid_maxSpeed = new byte[count];
@@ -89,10 +118,24 @@ public static class ElementManager
         liquid_inertialResistance = new byte[count];
         liquid_friction = new byte[count];
 
+        fire_temperature = new byte[count];
+        fire_requiresAir = new bool[count];
+        fire_fizzle = new int[count];
+
+
         typeLookup[0] = Type.EMPTY;
         internalName[0] = "air";
-        color[0] = Color.Transparent;
+        colorCode[0] = Color.Transparent;
+
         density[0] = 0;
+        hp[0] = 0;
+        hardness[0] = 0;
+
+        color[0] = Color.Transparent;
+        texture[0] = "";
+        isGradient[0] = false;
+        gradient_color[0] = Array.Empty<Color>();
+
         liquid_isStatic[0] = true;
         liquid_isSand[0] = false;
         liquid_maxSpeed[0] = 0;
@@ -100,6 +143,10 @@ public static class ElementManager
         liquid_dispersion[0] = 0;
         liquid_inertialResistance[0] = 0;
         liquid_friction[0] = 0;
+        fire_temperature[0] = 0;
+        fire_requiresAir[0] = false;
+        fire_fizzle[0] = 0;
+
 
         for (int i = 1; i < count; i++)
         {
@@ -107,7 +154,7 @@ public static class ElementManager
             element.element_id = i;
             typeLookup[i] = element.elementType;
             elementsByName.Add(element.internalName, i);
-            elementsByColor.Add(element.color, i);
+            elementsByColor.Add(element.colorCode, i);
             if (element.tags != null)
             {
                 for (int j = 0; j < element.tags.Length; j++)
@@ -116,11 +163,42 @@ public static class ElementManager
                 }
                 tags[i] = element.tags;
             }
-
+        }
+        //we loop over after defining names so we can convert material names to ids.
+        for (int i = 1; i < count; i++)
+        {
+            FinishedElement element = elements[i];
             typeLookup[i] = element.elementType;
             internalName[i] = element.internalName;
-            color[i] = element.color;
+            colorCode[i] = element.colorCode;
+
             density[i] = element.density;
+            hp[i] = element.hp;
+            hardness[i] = element.hardness;
+
+            color[i] = element.color;
+            texture[i] = element.textureTarget;
+            if (element.isGradient && element.textureTarget != "")
+            {
+                //load and sample the texture.
+                Texture2D gradient = Assets.GetResource<Texture2D>(element.textureTarget); 
+                byte[] color = new byte[gradient.Width * gradient.Height * 4];
+                gradient.GetData<byte>(color);
+                Color[] gradientColors = new Color[gradient.Width * gradient.Height];
+                int cx = 0;
+                for (int c = 0; c < color.Length; c+=4)
+                {
+                    gradientColors[cx++] = new Color(color[c], color[c+1], color[c+2], color[c+3]);
+                }
+                gradient_color[i] = gradientColors;
+                isGradient[i] = true;
+            }
+            else
+            {
+                gradient_color[i] = Array.Empty<Color>();
+                isGradient[i] = false;
+            }
+
             liquid_isStatic[i] = element.liquid_isStatic;
             liquid_isSand[i] = element.liquid_isSand;
             liquid_maxSpeed[i] = element.liquid_maxSpeed;
@@ -128,11 +206,25 @@ public static class ElementManager
             liquid_dispersion[i] = element.liquid_dispersion;
             liquid_inertialResistance[i] = element.liquid_inertialResistance;
             liquid_friction[i] = element.liquid_friction;
+
+            fire_temperature[i] = element.fire_temperature;
+            fire_requiresAir[i] = element.fire_requiresAir;
+            fire_fizzle[i] = GetElementIDByName(in element.fire_fizzle, in element.internalName);
+
         }
 
         LoadReactions(elements);
 
         Loaded = true;
+    }
+
+    private static int GetElementIDByName(in string targetElement, in string ourElement)
+    {
+        if (targetElement == string.Empty)
+            return 0;
+        if (elementsByName.TryGetValue(targetElement, out int elementID))
+            return elementID;
+        throw new ContentLoadException("Element '"+ourElement+"' references nonexistant element '"+targetElement+"'");
     }
 
     public static void LoadElements(string folderPath)
@@ -356,7 +448,7 @@ public static class ElementManager
     public static void CreateDebugElements()
     {
         ProtoElement powder = new ProtoElement();
-        powder.color = Color.Brown;
+        powder.colorCode = Color.Brown;
         powder.internalName = "debug_powder";
         powder.liquid_isSand = true;
         powder.elementType = Type.LIQUID;
@@ -376,5 +468,24 @@ public static class ElementManager
             }
             tagSet.Add(element);
         }
+    }
+
+    public static Color SampleGradient(int element, float life, ref Squirrel3 rnd)
+    {
+        float timer = hp[element];
+        switch (typeLookup[element])
+        {
+            case Type.EMPTY:
+            case Type.LIQUID:
+            case Type.GAS:
+            case Type.PHYSICS_SOLID:
+                break;
+            case Type.FIRE:
+                int count = gradient_color[element].Length;
+                int colorIndex = Rubedo.Lib.Math.FloorToInt(Rubedo.Lib.Math.Mix(count - 1, 0, Rubedo.Lib.Math.Clamp(life / timer, 0, 1)));
+                Color color = gradient_color[element][colorIndex];
+                return color * rnd.Range(0.75f, 1.25f);
+        }
+        return Color.Pink; //MISSING GRADIENT
     }
 }

@@ -1,5 +1,4 @@
-﻿//#define USE_DOUBLE_MWF_BUFFER
-#define USE_CHECKERBOARD_UPDATE
+﻿#define USE_CHECKERBOARD_UPDATE
 #define USE_ALTERNATING_UPDATE
 
 using FallingSand.Game.Elements;
@@ -7,6 +6,7 @@ using Microsoft.Xna.Framework;
 using Rubedo.Graphics;
 using Rubedo.Lib;
 using System.Runtime.CompilerServices;
+using System.Text;
 
 namespace FallingSand.Game.World;
 
@@ -24,23 +24,17 @@ public class WorldChunk
     public int worldTick;
 
     //CELL DATA
-    public readonly int[] element;
-    public readonly Vector2[] velocity;
-    public readonly Moving[] moving;
-    public readonly Color[] color;
+    public readonly int[] element;          //4 bytes
+    public readonly Velocity[] velocity;    //4 bytes
+    public readonly Moving[] moving;        //1 byte
+    public readonly Color[] color;          //4 bytes
+    public readonly CellHP[] hp;            //2 bytes
+
+    public readonly int[] burnFireType;         // element id of the Type.FIRE flavor currently burning this cell
+    public readonly byte[] burningIntensity;    // how intensely is this fire burning? Impacts ignition chance and fire spawn chance.
 
     public readonly bool[] dirtyRectStep;
-
-#if USE_DOUBLE_MWF_BUFFER
-    //we double up the movedWithFrame array so we can reset
-    //one while we use the other for the frame. Purely for performance.
-    private readonly bool[] movedWithFrame1;
-    private readonly bool[] movedWithFrame2;
-    private bool frameFlip = false;
-    private Task movedWithFrameReset = null;
-#else
     public readonly bool[] movedWithFrame;
-#endif
 
     public ref Rectangle DirtyRect => ref dirtyRect;
     public ref Rectangle RenderRect => ref renderRect;
@@ -78,9 +72,11 @@ public class WorldChunk
 
         dirtyRectStep = new bool[indexSize];
         element = new int[indexSize];
-        velocity = new Vector2[indexSize];
+        velocity = new Velocity[indexSize];
         moving = new Moving[indexSize];
-        color = new Color[indexSize];
+        color = new Color[indexSize]; 
+        hp = new CellHP[indexSize];
+        burnFireType = new int[indexSize];
 
 #if USE_DOUBLE_MWF_BUFFER
         movedWithFrame1 = new bool[indexSize];
@@ -97,8 +93,8 @@ public class WorldChunk
             int x1 = (i % size);
 
             element[i] = 0;
-            velocity[i] = new Vector2(0, 0);
-            moving[i] = new Moving() { isMoving = false, movingCount = 0 };
+            velocity[i] = new Velocity(0, 0);
+            moving[i] = new Moving() { IsMoving = false, MovingCount = 0 };
             color[i] = Color.Transparent;
         }
 
@@ -179,6 +175,46 @@ public class WorldChunk
             }
         }
     }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private void ProcessCell(in int x, in int y, in int cellID, in int elementID)
+    {
+        if (elementID == ElementManager.EMPTY)
+            return;
+
+        ElementManager.Type elementType = ElementManager.typeLookup[elementID];
+        switch (elementType)
+        {
+            case ElementManager.Type.LIQUID:
+                ElementBehaviour.StepLiquid(this, in x, in y, cellID, in elementID);
+                if (burnFireType[cellID] != 0)
+                {
+                    ElementBehaviour.StepBurning(this, in x, in y, cellID, in elementID);
+                    int nelementID = element[cellID]; // may have changed (e.g. to ash)
+                    if (nelementID == ElementManager.EMPTY)
+                        return;
+                }
+                break;
+            case ElementManager.Type.GAS:
+                ElementBehaviour.StepGas(this, in x, in y, cellID, in elementID);
+                if (burnFireType[cellID] != 0)
+                {
+                    ElementBehaviour.StepBurning(this, in x, in y, cellID, in elementID);
+                    int nelementID = element[cellID]; // may have changed (e.g. to ash)
+                    if (nelementID == ElementManager.EMPTY)
+                        return;
+                }
+                break;
+            case ElementManager.Type.FIRE:
+                ElementBehaviour.StepFire(this, in x, in y, cellID, in elementID);
+                break;
+            case ElementManager.Type.PHYSICS_SOLID:
+                break;
+            case ElementManager.Type.EMPTY:
+                break;
+        }
+    }
+
     public void MultithreadStep(SandWorld matrix, in int step)
     {
         if (dirtyRect.IsEmpty)
@@ -191,7 +227,6 @@ public class WorldChunk
 
         var localElementArray = this.element;
         var localMovedWithFrame = this.movedWithFrame;
-        var localTypeLookup = ElementManager.typeLookup;
 
 #if USE_ALTERNATING_UPDATE
         //bool sectionFlip = flip;
@@ -219,24 +254,7 @@ public class WorldChunk
                         bool moved = localMovedWithFrame[cellID];
                         if (!moved)
                         {
-                            int elementID = localElementArray[cellID];
-                            if (elementID == ElementManager.EMPTY)
-                                continue;
-
-                            ElementManager.Type elementType = localTypeLookup[elementID];
-                            switch (elementType)
-                            {
-                                case ElementManager.Type.LIQUID:
-                                    ElementBehaviour.StepLiquid(this, in x, in y, cellID, in elementID);
-                                    break;
-                                case ElementManager.Type.GAS:
-                                    ElementBehaviour.StepGas(this, in x, in y, cellID, in elementID);
-                                    break;
-                                case ElementManager.Type.PHYSICS_SOLID:
-                                    break;
-                                case ElementManager.Type.EMPTY:
-                                    break;
-                            }
+                            ProcessCell(in x, in y, in cellID, in localElementArray[cellID]);
                         }
                     }
                 }
@@ -248,24 +266,7 @@ public class WorldChunk
                         bool moved = localMovedWithFrame[cellID];
                         if (!moved)
                         {
-                            int elementID = localElementArray[cellID];
-                            if (elementID == ElementManager.EMPTY)
-                                continue;
-
-                            ElementManager.Type elementType = localTypeLookup[elementID];
-                            switch (elementType)
-                            {
-                                case ElementManager.Type.LIQUID:
-                                    ElementBehaviour.StepLiquid(this, in x, in y, cellID, in elementID);
-                                    break;
-                                case ElementManager.Type.GAS:
-                                    ElementBehaviour.StepGas(this, in x, in y, cellID, in elementID);
-                                    break;
-                                case ElementManager.Type.PHYSICS_SOLID:
-                                    break;
-                                case ElementManager.Type.EMPTY:
-                                    break;
-                            }
+                            ProcessCell(in x, in y, in cellID, in localElementArray[cellID]);
                         }
                     }
                 }
@@ -287,24 +288,7 @@ public class WorldChunk
                         bool moved = localMovedWithFrame[cellID];
                         if (!moved)
                         {
-                            int elementID = localElementArray[cellID];
-                            if (elementID == ElementManager.EMPTY)
-                                continue;
-
-                            ElementManager.Type elementType = localTypeLookup[elementID];
-                            switch (elementType)
-                            {
-                                case ElementManager.Type.LIQUID:
-                                    ElementBehaviour.StepLiquid(this, in x, in y, cellID, in elementID);
-                                    break;
-                                case ElementManager.Type.GAS:
-                                    ElementBehaviour.StepGas(this, in x, in y, cellID, in elementID);
-                                    break;
-                                case ElementManager.Type.PHYSICS_SOLID:
-                                    break;
-                                case ElementManager.Type.EMPTY:
-                                    break;
-                            }
+                            ProcessCell(in x, in y, in cellID, in localElementArray[cellID]);
                         }
                     }
                 }
@@ -316,24 +300,7 @@ public class WorldChunk
                         bool moved = localMovedWithFrame[cellID];
                         if (!moved)
                         {
-                            int elementID = localElementArray[cellID];
-                            if (elementID == ElementManager.EMPTY)
-                                continue;
-
-                            ElementManager.Type elementType = localTypeLookup[elementID];
-                            switch (elementType)
-                            {
-                                case ElementManager.Type.LIQUID:
-                                    ElementBehaviour.StepLiquid(this, in x, in y, cellID, in elementID);
-                                    break;
-                                case ElementManager.Type.GAS:
-                                    ElementBehaviour.StepGas(this, in x, in y, cellID, in elementID);
-                                    break;
-                                case ElementManager.Type.PHYSICS_SOLID:
-                                    break;
-                                case ElementManager.Type.EMPTY:
-                                    break;
-                            }
+                            ProcessCell(in x, in y, in cellID, in localElementArray[cellID]);
                         }
                     }
                 }
@@ -362,24 +329,7 @@ public class WorldChunk
                         bool moved = localMovedWithFrame[cellID];
                         if (!moved)
                         {
-                            int elementID = localElementArray[cellID];
-                            if (elementID == ElementManager.EMPTY)
-                                continue;
-
-                            ElementManager.Type elementType = localTypeLookup[elementID];
-                            switch (elementType)
-                            {
-                                case ElementManager.Type.LIQUID:
-                                    ElementBehaviour.StepLiquid(this, in x, in y, cellID, in elementID);
-                                    break;
-                                case ElementManager.Type.GAS:
-                                    ElementBehaviour.StepGas(this, in x, in y, cellID);
-                                    break;
-                                case ElementManager.Type.PHYSICS_SOLID:
-                                    break;
-                                case ElementManager.Type.EMPTY:
-                                    break;
-                            }
+                            ProcessCell(in x, in y, in cellID, in localElementArray[cellID]);
                         }
                     }
                 }
@@ -391,24 +341,7 @@ public class WorldChunk
                         bool moved = localMovedWithFrame[cellID];
                         if (!moved)
                         {
-                            int elementID = localElementArray[cellID];
-                            if (elementID == ElementManager.EMPTY)
-                                continue;
-
-                            ElementManager.Type elementType = localTypeLookup[elementID];
-                            switch (elementType)
-                            {
-                                case ElementManager.Type.LIQUID:
-                                    ElementBehaviour.StepLiquid(this, in x, in y, cellID, in elementID);
-                                    break;
-                                case ElementManager.Type.GAS:
-                                    ElementBehaviour.StepGas(this, in x, in y, cellID);
-                                    break;
-                                case ElementManager.Type.PHYSICS_SOLID:
-                                    break;
-                                case ElementManager.Type.EMPTY:
-                                    break;
-                            }
+                            ProcessCell(in x, in y, in cellID, in localElementArray[cellID]);
                         }
                     }
                 }
@@ -430,24 +363,7 @@ public class WorldChunk
                         bool moved = localMovedWithFrame[cellID];
                         if (!moved)
                         {
-                            int elementID = localElementArray[cellID];
-                            if (elementID == ElementManager.EMPTY)
-                                continue;
-
-                            ElementManager.Type elementType = localTypeLookup[elementID];
-                            switch (elementType)
-                            {
-                                case ElementManager.Type.LIQUID:
-                                    ElementBehaviour.StepLiquid(this, in x, in y, cellID, in elementID);
-                                    break;
-                                case ElementManager.Type.GAS:
-                                    ElementBehaviour.StepGas(this, in x, in y, cellID);
-                                    break;
-                                case ElementManager.Type.PHYSICS_SOLID:
-                                    break;
-                                case ElementManager.Type.EMPTY:
-                                    break;
-                            }
+                            ProcessCell(in x, in y, in cellID, in localElementArray[cellID]);
                         }
                     }
                 }
@@ -459,24 +375,7 @@ public class WorldChunk
                         bool moved = localMovedWithFrame[cellID];
                         if (!moved)
                         {
-                            int elementID = localElementArray[cellID];
-                            if (elementID == ElementManager.EMPTY)
-                                continue;
-
-                            ElementManager.Type elementType = localTypeLookup[elementID];
-                            switch (elementType)
-                            {
-                                case ElementManager.Type.LIQUID:
-                                    ElementBehaviour.StepLiquid(this, in x, in y, cellID, in elementID);
-                                    break;
-                                case ElementManager.Type.GAS:
-                                    ElementBehaviour.StepGas(this, in x, in y, cellID);
-                                    break;
-                                case ElementManager.Type.PHYSICS_SOLID:
-                                    break;
-                                case ElementManager.Type.EMPTY:
-                                    break;
-                            }
+                            ProcessCell(in x, in y, in cellID, in localElementArray[cellID]);
                         }
                     }
                 }
@@ -610,6 +509,8 @@ public class WorldChunk
         (velocity[actor], velocity[target]) = (velocity[target], velocity[actor]);
         (moving[actor], moving[target]) = (moving[target], moving[actor]);
         (color[actor], color[target]) = (color[target], color[actor]);
+        (hp[actor], hp[target]) = (hp[target], hp[actor]);
+        (burnFireType[actor], burnFireType[target]) = (burnFireType[target], burnFireType[actor]);
     }
 
 
@@ -623,6 +524,8 @@ public class WorldChunk
         (velocity[ours], other.velocity[theirs]) = (other.velocity[theirs], velocity[ours]);
         (moving[ours], other.moving[theirs]) = (other.moving[theirs], moving[ours]);
         (color[ours], other.color[theirs]) = (other.color[theirs], color[ours]);
+        (hp[ours], other.hp[theirs]) = (other.hp[theirs], hp[ours]);
+        (burnFireType[ours], other.burnFireType[theirs]) = (other.burnFireType[theirs], burnFireType[ours]);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -730,13 +633,13 @@ public class WorldChunk
     public void SetMovingFaster(ref readonly int cellID, ref readonly ElementManager.Type elementType, ref readonly byte inertialRes)
     {
         ref Moving moving = ref this.moving[cellID];
-        if (moving.isMoving)
+        if (moving.IsMoving)
             return;
 
         if (inertialRes < chunkRNG.Percent())
         {
-            moving.isMoving = true;
-            moving.movingCount = 0;
+            moving.IsMoving = true;
+            moving.MovingCount = 0;
         }
     }
 
@@ -747,13 +650,13 @@ public class WorldChunk
             return;
 
         ref Moving moving = ref this.moving[cellID];
-        if (moving.isMoving || ElementManager.typeLookup[elementID] != ElementManager.Type.LIQUID)
+        if (moving.IsMoving || ElementManager.typeLookup[elementID] != ElementManager.Type.LIQUID)
             return;
 
         if (ElementManager.liquid_inertialResistance[elementID] < chunkRNG.Percent())
         {
-            moving.isMoving = true;
-            moving.movingCount = 0; //naughty naughty, mutating a struct...
+            moving.IsMoving = true;
+            moving.MovingCount = 0; //naughty naughty, mutating a struct...
         }
     }
     public void SetMovingPos(in int x, in int y)
@@ -789,15 +692,15 @@ public class WorldChunk
             int dirtyY = Rubedo.Lib.Math.Clamp(renderRect.Y, chunkY, chunkY + size);
             int finY = Rubedo.Lib.Math.Clamp(renderRect.Bottom, chunkY, chunkY + size);
 
-            for (int y = dirtyY; y < finY; y++)
+            if (parentMatrix.drawMoveOverride)
             {
-                for (int x = dirtyX; x < finX; x++)
+                for (int y = dirtyY; y < finY; y++)
                 {
-                    int draw = region.GetDrawIndex(x, y);
-                    int cellID = GetCellIndex(in x, in y);
-
-                    if (parentMatrix.drawMoveOverride)
+                    for (int x = dirtyX; x < finX; x++)
                     {
+                        int draw = region.GetDrawIndex(x, y);
+                        int cellID = GetCellIndex(in x, in y);
+
                         if (this.element[cellID] == 0)
                         {
                             buffer[draw] = Color.Transparent;
@@ -811,9 +714,30 @@ public class WorldChunk
                             buffer[draw] = Color.Green;
                         }
                     }
-                    else
+                }
+            }
+            else
+            {
+                for (int y = dirtyY; y < finY; y++)
+                {
+                    for (int x = dirtyX; x < finX; x++)
                     {
-                        buffer[draw] = this.color[cellID];
+                        int draw = region.GetDrawIndex(x, y);
+                        int cellID = GetCellIndex(in x, in y);
+                        int element = this.element[cellID];
+                        int fireElement = this.burnFireType[cellID];
+                        if (ElementManager.isGradient[element])
+                        {
+                            buffer[draw] = ElementManager.SampleGradient(element, hp[cellID], ref chunkRNG);
+                        }
+                        else if (ElementManager.isGradient[fireElement])
+                        {
+                            buffer[draw] = ElementManager.SampleGradient(fireElement, hp[cellID], ref chunkRNG);
+                        }
+                        else
+                        {
+                            buffer[draw] = this.color[cellID];
+                        }
                     }
                 }
             }
@@ -826,7 +750,83 @@ public class WorldChunk
 
     public struct Moving
     {
-        public bool isMoving;
-        public byte movingCount;
+        private byte data;
+
+        public bool IsMoving
+        {
+            readonly get => (data & 0x80) != 0;
+            set => data = (byte)(value ? (data | 0x80) : (data & 0x7F));
+        }
+
+        public byte MovingCount
+        {
+            readonly get => (byte)(data & 0x7F);
+            set => data = (byte)((data & 0x80) | (value & 0x7F));
+        }
+    }
+    public struct Velocity
+    {
+        private const float SCALE = 1024f; // 2^10
+
+        private short rawX;
+        private short rawY;
+
+        public Velocity(float x, float y)
+        {
+            this.X = x;
+            this.Y = y;
+        }
+
+        public void Zero()
+        {
+            rawX = 0; 
+            rawY = 0;
+        }
+
+        public float X
+        {
+            readonly get => rawX / SCALE;
+            set => rawX = (short)(value * SCALE);
+        }
+
+        public float Y
+        {
+            readonly get => rawY / SCALE;
+            set => rawY = (short)(value * SCALE);
+        }
+
+        public string ToNiceString(string format = "0.00")
+        {
+            StringBuilder sb = new StringBuilder();
+            sb.Append("[X: ");
+            sb.Append(X.ToString(format));
+            sb.Append(", Y: ");
+            sb.Append(Y.ToString(format));
+            sb.Append(']');
+            return sb.ToString();
+        }
+    }
+    public struct CellHP
+    {
+        private const float SCALE = 100f;
+        private const float MAX = short.MaxValue / SCALE;
+
+        private short raw;
+
+        public float Value
+        {
+            get => raw / SCALE;
+            set => raw = (short)(Math.Clamp(value, 0f, MAX) * SCALE);
+        }
+
+        public readonly short GetRaw() => raw;
+
+        public void Zero()
+        {
+            raw = 0;
+        }
+
+        public static implicit operator float(CellHP hp) => hp.Value;
+        public static implicit operator CellHP(float value) => new CellHP { Value = value };
     }
 }

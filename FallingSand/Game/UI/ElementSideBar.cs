@@ -73,7 +73,7 @@ public class ElementSideBar
             state.leftClickCondition.Consume();
         };
 
-        Image image = Image.CreateSolidColorImage(32, 32, ElementManager.color[element]);
+        Image image = Image.CreateSolidColorImage(32, 32, ElementManager.colorCode[element]);
         button.AddChild(image);
         //button.AddChild(new SelectableTintSet(image, 1f));
 

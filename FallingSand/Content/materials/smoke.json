@@ -2,20 +2,32 @@
 	{
 		"internalName": "smoke",
 		"cellType": "gas",
-		"color": "ff4d4d4d",
+		"colorCode": "ff4d4d4d",
 		"density": 0.6,
-		
+
 		"liquid_isSand": true,
 		"liquid_maxSpeed": 5,
 		"liquid_gravity": 1,
 		"liquid_inertialResistance": 0,
 		"liquid_friction": 0,
+
+		"graphics": {
+			"color": "ff4d4d4d"
+		}
 	},
 	{
 		"parent": "smoke",
 		"internalName": "flammable_gas",
-		"color": "ff72a571",
+		"colorCode": "ff72a571",
 		"density": 0.5,
-		"liquid_inertialResistance": 85
+		"hp": 0.25,
+		"liquid_inertialResistance": 85,
+
+		"fire_temperature": 1,
+		"fire_requiresAir": false,
+
+		"graphics": {
+			"color": "ff72a571"
+		}
 	}
 ]

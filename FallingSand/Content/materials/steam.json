@@ -2,7 +2,11 @@
 	{
 		"internalName": "steam",
 		"cellType": "gas",
-		"color": "ffadadbd",
-		"density": 0.7
+		"colorCode": "ffadadbd",
+		"density": 0.7,
+
+		"graphics": {
+			"color": "ffadadbd"
+		}
 	}
 ]

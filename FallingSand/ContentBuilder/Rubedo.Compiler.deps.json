@@ -10,6 +10,7 @@
         "dependencies": {
           "AsepriteDotNet": "1.9.0",
           "NLog": "6.0.1",
+          "ShadowDusk.Compiler": "0.18.0",
           "SkiaSharp": "3.119.0"
         },
         "runtime": {
@@ -29,6 +30,160 @@
           "lib/netstandard2.1/NLog.dll": {
             "assemblyVersion": "6.0.0.0",
             "fileVersion": "6.0.1.4190"
+          }
+        }
+      },
+      "ShadowDusk.Compiler/0.18.0": {
+        "dependencies": {
+          "ShadowDusk.Core": "0.18.0",
+          "ShadowDusk.GLSL": "0.18.0",
+          "ShadowDusk.HLSL": "0.18.0"
+        },
+        "runtime": {
+          "lib/net8.0/ShadowDusk.Compiler.dll": {
+            "assemblyVersion": "0.18.0.0",
+            "fileVersion": "0.18.0.0"
+          }
+        }
+      },
+      "ShadowDusk.Core/0.18.0": {
+        "runtime": {
+          "lib/net8.0/ShadowDusk.Core.dll": {
+            "assemblyVersion": "0.18.0.0",
+            "fileVersion": "0.18.0.0"
+          }
+        }
+      },
+      "ShadowDusk.GLSL/0.18.0": {
+        "dependencies": {
+          "ShadowDusk.Core": "0.18.0",
+          "Silk.NET.SPIRV.Cross.Native": "2.23.0"
+        },
+        "runtime": {
+          "lib/net8.0/ShadowDusk.GLSL.dll": {
+            "assemblyVersion": "0.18.0.0",
+            "fileVersion": "0.18.0.0"
+          }
+        },
+        "runtimeTargets": {
+          "runtimes/android-arm64/native/libspirv-cross.so": {
+            "rid": "android-arm64",
+            "assetType": "native",
+            "fileVersion": "0.0.0.0"
+          }
+        }
+      },
+      "ShadowDusk.HLSL/0.18.0": {
+        "dependencies": {
+          "ShadowDusk.Core": "0.18.0",
+          "Vortice.D3DCompiler": "3.3.4",
+          "Vortice.Direct3D12": "3.5.0",
+          "Vortice.Dxc": "3.3.4"
+        },
+        "runtime": {
+          "lib/net8.0/ShadowDusk.HLSL.dll": {
+            "assemblyVersion": "0.18.0.0",
+            "fileVersion": "0.18.0.0"
+          }
+        },
+        "runtimeTargets": {
+          "runtimes/android-arm64/native/libdxcompiler.so": {
+            "rid": "android-arm64",
+            "assetType": "native",
+            "fileVersion": "0.0.0.0"
+          },
+          "runtimes/linux-x64/native/libvkd3d-shader.so.1": {
+            "rid": "linux-x64",
+            "assetType": "native",
+            "fileVersion": "0.0.0.0"
+          },
+          "runtimes/osx-arm64/native/libdxcompiler.dylib": {
+            "rid": "osx-arm64",
+            "assetType": "native",
+            "fileVersion": "0.0.0.0"
+          },
+          "runtimes/osx-arm64/native/libvkd3d-shader.1.dylib": {
+            "rid": "osx-arm64",
+            "assetType": "native",
+            "fileVersion": "0.0.0.0"
+          },
+          "runtimes/osx-x64/native/libdxcompiler.dylib": {
+            "rid": "osx-x64",
+            "assetType": "native",
+            "fileVersion": "0.0.0.0"
+          },
+          "runtimes/osx-x64/native/libvkd3d-shader.1.dylib": {
+            "rid": "osx-x64",
+            "assetType": "native",
+            "fileVersion": "0.0.0.0"
+          },
+          "runtimes/win-x64/native/libvkd3d-shader-1.dll": {
+            "rid": "win-x64",
+            "assetType": "native",
+            "fileVersion": "0.0.0.0"
+          }
+        }
+      },
+      "SharpGen.Runtime/2.1.2-beta": {
+        "runtime": {
+          "lib/net8.0/SharpGen.Runtime.dll": {
+            "assemblyVersion": "2.1.2.0",
+            "fileVersion": "2.1.2.0"
+          }
+        }
+      },
+      "SharpGen.Runtime.COM/2.1.2-beta": {
+        "dependencies": {
+          "SharpGen.Runtime": "2.1.2-beta"
+        },
+        "runtime": {
+          "lib/net8.0/SharpGen.Runtime.COM.dll": {
+            "assemblyVersion": "2.1.2.0",
+            "fileVersion": "2.1.2.0"
+          }
+        }
+      },
+      "Silk.NET.SPIRV.Cross.Native/2.23.0": {
+        "runtimeTargets": {
+          "runtimes/linux-arm/native/libspirv-cross.so": {
+            "rid": "linux-arm",
+            "assetType": "native",
+            "fileVersion": "0.0.0.0"
+          },
+          "runtimes/linux-arm64/native/libspirv-cross.so": {
+            "rid": "linux-arm64",
+            "assetType": "native",
+            "fileVersion": "0.0.0.0"
+          },
+          "runtimes/linux-x64/native/libspirv-cross.so": {
+            "rid": "linux-x64",
+            "assetType": "native",
+            "fileVersion": "0.0.0.0"
+          },
+          "runtimes/osx-arm64/native/libspirv-cross.dylib": {
+            "rid": "osx-arm64",
+            "assetType": "native",
+            "fileVersion": "0.0.0.0"
+          },
+          "runtimes/osx-x64/native/libspirv-cross.dylib": {
+            "rid": "osx-x64",
+            "assetType": "native",
+            "fileVersion": "0.0.0.0"
+          },
+          "runtimes/win-arm64/native/spirv-cross.dll": {
+            "rid": "win-arm64",
+            "assetType": "native",
+            "fileVersion": "0.0.0.0"
+          },
+          "runtimes/win-x64/native/spirv-cross.dll": {
+            "rid": "win-x64",
+            "assetType": "native",
+            "fileVersion": "0.0.0.0"
+          },
+          "runtimes/win-x86/native/spirv-cross.dll": {
+            "rid": "win-x86",
+            "assetType": "native",
+            "fileVersion": "0.0.0.0"
           }
         }
       },
@@ -71,6 +226,109 @@
             "fileVersion": "0.0.0.0"
           }
         }
+      },
+      "Vortice.D3DCompiler/3.3.4": {
+        "dependencies": {
+          "SharpGen.Runtime": "2.1.2-beta",
+          "SharpGen.Runtime.COM": "2.1.2-beta",
+          "Vortice.DirectX": "3.5.0",
+          "Vortice.Mathematics": "1.7.8"
+        },
+        "runtime": {
+          "lib/net8.0/Vortice.D3DCompiler.dll": {
+            "assemblyVersion": "3.3.4.0",
+            "fileVersion": "3.3.4.0"
+          }
+        }
+      },
+      "Vortice.Direct3D12/3.5.0": {
+        "dependencies": {
+          "SharpGen.Runtime": "2.1.2-beta",
+          "Vortice.DXGI": "3.5.0"
+        },
+        "runtime": {
+          "lib/net8.0/Vortice.Direct3D12.dll": {
+            "assemblyVersion": "3.5.0.0",
+            "fileVersion": "3.5.0.0"
+          }
+        }
+      },
+      "Vortice.DirectX/3.5.0": {
+        "dependencies": {
+          "SharpGen.Runtime": "2.1.2-beta",
+          "SharpGen.Runtime.COM": "2.1.2-beta",
+          "Vortice.Mathematics": "1.7.8"
+        },
+        "runtime": {
+          "lib/net8.0/Vortice.DirectX.dll": {
+            "assemblyVersion": "3.5.0.0",
+            "fileVersion": "3.5.0.0"
+          }
+        }
+      },
+      "Vortice.Dxc/3.3.4": {
+        "dependencies": {
+          "SharpGen.Runtime": "2.1.2-beta",
+          "SharpGen.Runtime.COM": "2.1.2-beta"
+        },
+        "runtime": {
+          "lib/net8.0/Vortice.Dxc.dll": {
+            "assemblyVersion": "3.3.4.0",
+            "fileVersion": "3.3.4.0"
+          }
+        },
+        "runtimeTargets": {
+          "runtimes/linux-x64/native/libdxcompiler.so": {
+            "rid": "linux-x64",
+            "assetType": "native",
+            "fileVersion": "0.0.0.0"
+          },
+          "runtimes/linux-x64/native/libdxil.so": {
+            "rid": "linux-x64",
+            "assetType": "native",
+            "fileVersion": "0.0.0.0"
+          },
+          "runtimes/win-arm64/native/dxcompiler.dll": {
+            "rid": "win-arm64",
+            "assetType": "native",
+            "fileVersion": "1.7.2212.40"
+          },
+          "runtimes/win-arm64/native/dxil.dll": {
+            "rid": "win-arm64",
+            "assetType": "native",
+            "fileVersion": "101.7.2212.36"
+          },
+          "runtimes/win-x64/native/dxcompiler.dll": {
+            "rid": "win-x64",
+            "assetType": "native",
+            "fileVersion": "1.7.2212.40"
+          },
+          "runtimes/win-x64/native/dxil.dll": {
+            "rid": "win-x64",
+            "assetType": "native",
+            "fileVersion": "101.7.2212.36"
+          }
+        }
+      },
+      "Vortice.DXGI/3.5.0": {
+        "dependencies": {
+          "SharpGen.Runtime": "2.1.2-beta",
+          "Vortice.DirectX": "3.5.0"
+        },
+        "runtime": {
+          "lib/net8.0/Vortice.DXGI.dll": {
+            "assemblyVersion": "3.5.0.0",
+            "fileVersion": "3.5.0.0"
+          }
+        }
+      },
+      "Vortice.Mathematics/1.7.8": {
+        "runtime": {
+          "lib/net8.0/Vortice.Mathematics.dll": {
+            "assemblyVersion": "1.7.8.0",
+            "fileVersion": "1.7.8.0"
+          }
+        }
       }
     }
   },
@@ -94,6 +352,55 @@
       "path": "nlog/6.0.1",
       "hashPath": "nlog.6.0.1.nupkg.sha512"
     },
+    "ShadowDusk.Compiler/0.18.0": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-KOEBXuadoFpwEM2ASrtvlHO85xSfq/hrQZvY8dg2TLgJlzw1h0muYMPJWq6uuERpNf9Yrb6NVe1OX79koL1RvA==",
+      "path": "shadowdusk.compiler/0.18.0",
+      "hashPath": "shadowdusk.compiler.0.18.0.nupkg.sha512"
+    },
+    "ShadowDusk.Core/0.18.0": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-2CEDLXoZYzd1/E4wIOXYRAzOFYis3dDE3cTh9CJtKbR/MclAKKpUprK83c6ZQVQhvti60j+h5mWVTF44wYEhGw==",
+      "path": "shadowdusk.core/0.18.0",
+      "hashPath": "shadowdusk.core.0.18.0.nupkg.sha512"
+    },
+    "ShadowDusk.GLSL/0.18.0": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-v25Vi6oj76hc+fibgh7jlmk0GzUa5syIFTcYxkaGVjEV5qpdVb+fr2VwAnKxM6AyShcTq/NCsGPU2SjzsiQidQ==",
+      "path": "shadowdusk.glsl/0.18.0",
+      "hashPath": "shadowdusk.glsl.0.18.0.nupkg.sha512"
+    },
+    "ShadowDusk.HLSL/0.18.0": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-7By8VW1CtQAf4PkWjduH4Sfz9FWGa9QA0IPQLXwAkzg0U3Lp218zDHZt3FkcdKp+v26ojU2/kla/giXXH8OYPg==",
+      "path": "shadowdusk.hlsl/0.18.0",
+      "hashPath": "shadowdusk.hlsl.0.18.0.nupkg.sha512"
+    },
+    "SharpGen.Runtime/2.1.2-beta": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-nqZAjfEG1jX1ivvdZLsi6Pkt0DiOJyuOgRgldNFsmjXFPhxUbXQibofLSwuDZidL2kkmtTF8qLoRIeqeVdXgYw==",
+      "path": "sharpgen.runtime/2.1.2-beta",
+      "hashPath": "sharpgen.runtime.2.1.2-beta.nupkg.sha512"
+    },
+    "SharpGen.Runtime.COM/2.1.2-beta": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-HBCrb6HfnUWx9v5/GjJeBr5DuodZLnHlFQQYXPrQs1Hbe1c6Wd0uCXf+SJp4hW8fQNxjXEu0FgiyHGlA/SRzRw==",
+      "path": "sharpgen.runtime.com/2.1.2-beta",
+      "hashPath": "sharpgen.runtime.com.2.1.2-beta.nupkg.sha512"
+    },
+    "Silk.NET.SPIRV.Cross.Native/2.23.0": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-pY4LmIE8nYXkfCgExxksYlnYZZ4D3/AW13XNcpyp0jJDTkCpDsXL0nLOX7CM7tPS6xvkiERRd+Do2zegbl7Xtw==",
+      "path": "silk.net.spirv.cross.native/2.23.0",
+      "hashPath": "silk.net.spirv.cross.native.2.23.0.nupkg.sha512"
+    },
     "SkiaSharp/3.119.0": {
       "type": "package",
       "serviceable": true,
@@ -114,6 +421,48 @@
       "sha512": "sha512-IwC9yx36lOdXVT2DjgmWHl1qkVspfj8ctd4+li8CNnvqdfaTolXCOh6TLznURcPAvzatx9K/tLOB7zT6T8EA9w==",
       "path": "skiasharp.nativeassets.win32/3.119.0",
       "hashPath": "skiasharp.nativeassets.win32.3.119.0.nupkg.sha512"
+    },
+    "Vortice.D3DCompiler/3.3.4": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-G0yAN1us091ulIzPfMVJeJf8JX3Tu/Wu0l4zip4HPLfVUWWxsBJF0eaEdwSPrUyz97LEG6zjHruL4sZoNRBHcA==",
+      "path": "vortice.d3dcompiler/3.3.4",
+      "hashPath": "vortice.d3dcompiler.3.3.4.nupkg.sha512"
+    },
+    "Vortice.Direct3D12/3.5.0": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-/gZ5AAVxz9wX/IiO0jubuuCa1lfXxyumCDlcdDiRkweMDRzPghU0Om4RjN339jJ0H2UJJNRh8YmzTi3qqAYDvQ==",
+      "path": "vortice.direct3d12/3.5.0",
+      "hashPath": "vortice.direct3d12.3.5.0.nupkg.sha512"
+    },
+    "Vortice.DirectX/3.5.0": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-LwyojEqRCaYgMoEqKsLnHWJ85wM237wFzZy/w57kvQPDsEd+zcqdwDYswOCEdizcLtDBzX/Xt4bbUPgFi8Kp4w==",
+      "path": "vortice.directx/3.5.0",
+      "hashPath": "vortice.directx.3.5.0.nupkg.sha512"
+    },
+    "Vortice.Dxc/3.3.4": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-Q+JJzn96ZKaLQFEhLRFtWau0/KxORtREpP8FTRdKN0luIdrTZIARto7OESKpOGXl3idIGP/jH8YQIupNzaR5EQ==",
+      "path": "vortice.dxc/3.3.4",
+      "hashPath": "vortice.dxc.3.3.4.nupkg.sha512"
+    },
+    "Vortice.DXGI/3.5.0": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-W1dHY13DbitLJDVAAD8+YiGddqzBP1m3wN3pfEmxYrrE+dGEV/31aaw8EV74GXYnJQZ2vWJCnc7LCFPR2YkBnw==",
+      "path": "vortice.dxgi/3.5.0",
+      "hashPath": "vortice.dxgi.3.5.0.nupkg.sha512"
+    },
+    "Vortice.Mathematics/1.7.8": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-hpVlfej54yC6Qaq9AYXWgTgF8SDz2dtKbDNZGO8msjn3NjdkUBnFcIzYfOWyvwvpr3aqZPKh4WSSnJ78GxyIWg==",
+      "path": "vortice.mathematics/1.7.8",
+      "hashPath": "vortice.mathematics.1.7.8.nupkg.sha512"
     }
   }
 }

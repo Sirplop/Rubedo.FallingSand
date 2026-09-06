@@ -2,20 +2,26 @@
 	{
 		"internalName": "lava",
 		"cellType": "liquid",
-		"color": "ffff6314",
+		"colorCode": "ffff6314",
 		"density": 1,
-		
+
 		"liquid_maxSpeed": 5,
 		"liquid_gravity": 1,
 		"liquid_dispersion": 3,
 		"liquid_inertialResistance": 0,
 		"liquid_friction": 0,
 
+		"graphics": {
+			"color": "ffff6314"
+		},
+
 		"reaction": [
 			{
 				"probability": 20,
-				"input_cell_1": "lava",				"output_cell_1": "lava",
-				"input_cell_2": "[meltable]",	"output_cell_2": "[meltable]_molten"
+				"input_cell_1": "lava",
+				"output_cell_1": "lava",
+				"input_cell_2": "[meltable]",
+				"output_cell_2": "[meltable]_molten"
 			}
 		]
 	}

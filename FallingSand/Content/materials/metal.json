@@ -2,7 +2,7 @@
 	{
 		"internalName": "metal",
 		"cellType": "liquid",
-		"color": "ffaaaaaa",
+		"colorCode": "ffaaaaaa",
 		"density": 80,
 		"tags": "[meltable]",
 
@@ -11,14 +11,22 @@
 		"liquid_maxSpeed": 5,
 		"liquid_gravity": 1,
 		"liquid_inertialResistance": 50,
-		"liquid_friction": 40
+		"liquid_friction": 40,
+
+		"graphics": {
+			"color": "ffaaaaaa"
+		}
 	},
 	{
 		"parent": "metal",
 		"internalName": "metal_molten",
-		"color": "ffaa9999",
+		"colorCode": "ffaa9999",
 		"density": 80,
 		"liquid_isStatic": false,
-		"liquid_isSand": false
+		"liquid_isSand": false,
+
+		"graphics": {
+			"color": "ffaa9999"
+		}
 	}
 ]

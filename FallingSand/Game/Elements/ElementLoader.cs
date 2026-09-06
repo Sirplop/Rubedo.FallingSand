@@ -15,6 +15,8 @@ namespace FallingSand.Game.Elements;
 /// </summary>
 public static class ElementLoader
 {
+    private static HashSet<Color> _seenColors = new HashSet<Color>();
+    
     public static List<FinishedElement> PopulateElements(List<ProtoElement> elements)
     {
         List<FinishedElement> result = new List<FinishedElement>();
@@ -115,21 +117,30 @@ public static class ElementLoader
 
             if (!CheckValue(jsonObj, "internalName", out element.internalName))
             {
-                throw new JsonException($"Missing section 'name' in element '{path}'!");
+                throw new JsonException($"Missing required section 'internalName' in element '{path}'!");
             }
-            if (!CheckValue(jsonObj, "color", out string color))
+            if (!CheckValue(jsonObj, "colorCode", out string colorCode))
             {
-                throw new JsonException($"Missing section 'color' in element '{path}'!");
+                throw new JsonException($"Missing required section 'colorCode' in element '{path}'!");
             }
             else
             {
                 try
                 {
-                    element.color = Rubedo.Lib.Extensions.ColorExtensions.FromHexARGB(color);
+                    element.colorCode = Rubedo.Lib.Extensions.ColorExtensions.FromHexARGB(colorCode);
                 }
                 catch
                 {
-                    throw new ContentLoadException($"Element file '{path}', element '{element.internalName}', has a malformed color!");
+                    throw new ContentLoadException($"Element file '{path}', element '{element.internalName}', has a malformed material color code!");
+                }
+
+                if (_seenColors.Contains(element.colorCode))
+                {
+                    throw new ContentLoadException($"Element '{element.internalName}' has conflicting color code!");
+                }
+                else
+                {
+                    _seenColors.Add(element.colorCode);
                 }
             }
 
@@ -141,9 +152,36 @@ public static class ElementLoader
                     "liquid" => ElementManager.Type.LIQUID,
                     "gas" => ElementManager.Type.GAS,
                     "solid" => ElementManager.Type.PHYSICS_SOLID,
+                    "fire" => ElementManager.Type.FIRE,
                     _ => throw new ContentLoadException($"Element file '{path}', element '{element.internalName}', has a malformed cell type!"),
                 };
                 element.def_elementType = true;
+            }
+
+            if (CheckValue(jsonObj, "graphics", out JsonObject graphics))
+            {
+                if (CheckValue(graphics, "color", out string cellColor))
+                {
+                    try
+                    {
+                        element.color = Rubedo.Lib.Extensions.ColorExtensions.FromHexARGB(colorCode);
+                        element.def_color = true;
+                    }
+                    catch
+                    {
+                        throw new ContentLoadException($"Element file '{path}', element '{element.internalName}', has a malformed graphics color!");
+                    }
+                }
+                if (CheckValue(graphics, "texture_file", out string texture))
+                {
+                    element.textureTarget = texture;
+                    element.def_texture = true;
+                }
+                if (CheckValue(graphics, "is_gradient", out bool isGradient))
+                {
+                    element.isGradient = isGradient;
+                    element.def_isGradient = true;
+                }
             }
 
             if (CheckValue(jsonObj, "parent", out string parent))
@@ -169,6 +207,16 @@ public static class ElementLoader
             {
                 element.density = density;
                 element.def_density = true;
+            }
+            if (CheckValue(jsonObj, "hp", out float hp))
+            {
+                element.hp = hp;
+                element.def_hp = true;
+            }
+            if (CheckValue(jsonObj, "hardness", out int hardness))
+            {
+                element.hardness = hardness;
+                element.def_hardness = true;
             }
 
             if (CheckValue(jsonObj, "liquid_isSand", out bool isSand))
@@ -205,6 +253,21 @@ public static class ElementLoader
             {
                 element.liquid_friction = friction;
                 element.def_liquid_friction = true;
+            }
+            if (CheckValue(jsonObj, "fire_temperature", out byte burnTemp))
+            {
+                element.fire_temperature = burnTemp;
+                element.def_fire_temperature = true;
+            }
+            if (CheckValue(jsonObj, "fire_requiresAir", out bool requiresAir))
+            {
+                element.fire_requiresAir = requiresAir;
+                element.def_fire_requires_air = true;
+            }
+            if (CheckValue(jsonObj, "fire_fizzles", out string fizzlesTo))
+            {
+                element.fire_fizzle = fizzlesTo;
+                element.def_fire_fizzles = true;
             }
 
             if (jsonObj.TryGetPropertyValue("reaction", out JsonNode reactNode))
@@ -252,12 +315,21 @@ public static class ElementLoader
         {
             try
             {
+                if (typeof(T) == typeof(JsonObject))
+                {
+                    value = (T)(object)node.AsObject();
+                    return true;
+                }
+                else
+                {
+
+                }
                 value = node.GetValue<T>();
             }
             catch
             {
                 json.TryGetPropertyValue("internalName", out JsonNode elementName);
-                throw new JsonException($"Wrong data type for '{name}' in element '{elementName.GetValue<string>()}'! (was {typeof(T)})");
+                throw new JsonException($"Wrong data type for '{name}' in element '{elementName.GetValue<string>()}'! (looking for {typeof(T)})");
             }
             return true;
         }
