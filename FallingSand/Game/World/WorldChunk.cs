@@ -3,8 +3,10 @@
 
 using FallingSand.Game.Elements;
 using Microsoft.Xna.Framework;
+using Microsoft.Xna.Framework.Graphics.PackedVector;
 using Rubedo.Graphics;
 using Rubedo.Lib;
+using System;
 using System.Runtime.CompilerServices;
 using System.Text;
 
@@ -15,6 +17,8 @@ namespace FallingSand.Game.World;
 /// </summary>
 public class WorldChunk
 {
+    public static readonly HalfVector4 ZERO_STAIN = new HalfVector4(0, 0, 0, 0);
+
     public Squirrel3 chunkRNG;
 
     private readonly RectF cameraIntersection;
@@ -28,6 +32,7 @@ public class WorldChunk
     public readonly Velocity[] velocity;    //4 bytes
     public readonly Moving[] moving;        //1 byte
     public readonly Color[] color;          //4 bytes
+    public readonly ShortColor[] stain;     //8 bytes
     public readonly CellHP[] hp;            //2 bytes
 
     public readonly int[] burnFireType;         // element id of the Type.FIRE flavor currently burning this cell
@@ -57,7 +62,14 @@ public class WorldChunk
 
     public WorldChunk(SandWorld parent, WorldRegion region, int worldX, int worldY, int size)
     {
-        chunkRNG = new Squirrel3(unchecked((long)worldX << 32 | (uint)worldY));
+        unchecked
+        {
+            uint h = (uint)worldX * 0x9E3779B1; // large odd constant, spread x bits
+            h ^= (uint)worldY * 0x85EBCA77;     // different constant, spread y bits
+            h ^= h >> 15;                       // low bits of x/y don't dominate
+            chunkRNG = new Squirrel3((int)h);
+        }
+        //chunkRNG = new Squirrel3(unchecked((long)worldX << 32 | (uint)worldY));
 
         this.indexSize = size * size;
         this.region = region;
@@ -74,7 +86,8 @@ public class WorldChunk
         element = new int[indexSize];
         velocity = new Velocity[indexSize];
         moving = new Moving[indexSize];
-        color = new Color[indexSize]; 
+        color = new Color[indexSize];
+        stain = new ShortColor[indexSize];
         hp = new CellHP[indexSize];
         burnFireType = new int[indexSize];
         burningIntensity = new byte[indexSize];
@@ -91,6 +104,7 @@ public class WorldChunk
             element[i] = 0;
             velocity[i] = new Velocity(0, 0);
             moving[i] = new Moving() { IsMoving = false, MovingCount = 0 };
+            color[i] = Color.Transparent;
             color[i] = Color.Transparent;
         }
 
@@ -151,7 +165,6 @@ public class WorldChunk
         switch (elementType)
         {
             case ElementManager.Type.LIQUID:
-                ElementBehaviour.StepLiquid(this, in x, in y, cellID, in elementID);
                 if (burnFireType[cellID] != 0)
                 {
                     ElementBehaviour.StepBurning(this, in x, in y, cellID, in elementID);
@@ -159,9 +172,9 @@ public class WorldChunk
                     if (nelementID == ElementManager.EMPTY)
                         return;
                 }
+                ElementBehaviour.StepLiquid(this, in x, in y, cellID, in elementID);
                 break;
             case ElementManager.Type.GAS:
-                ElementBehaviour.StepGas(this, in x, in y, cellID, in elementID);
                 if (burnFireType[cellID] != 0)
                 {
                     ElementBehaviour.StepBurning(this, in x, in y, cellID, in elementID);
@@ -169,6 +182,7 @@ public class WorldChunk
                     if (nelementID == ElementManager.EMPTY)
                         return;
                 }
+                ElementBehaviour.StepGas(this, in x, in y, cellID, in elementID);
                 break;
             case ElementManager.Type.FIRE:
                 ElementBehaviour.StepFire(this, in x, in y, cellID, in elementID);
@@ -474,8 +488,10 @@ public class WorldChunk
         (velocity[actor], velocity[target]) = (velocity[target], velocity[actor]);
         (moving[actor], moving[target]) = (moving[target], moving[actor]);
         (color[actor], color[target]) = (color[target], color[actor]);
+        (stain[actor], stain[target]) = (stain[target], stain[actor]);
         (hp[actor], hp[target]) = (hp[target], hp[actor]);
         (burnFireType[actor], burnFireType[target]) = (burnFireType[target], burnFireType[actor]);
+        (burningIntensity[actor], burningIntensity[target]) = (burningIntensity[target], burningIntensity[actor]);
     }
 
 
@@ -489,8 +505,10 @@ public class WorldChunk
         (velocity[ours], other.velocity[theirs]) = (other.velocity[theirs], velocity[ours]);
         (moving[ours], other.moving[theirs]) = (other.moving[theirs], moving[ours]);
         (color[ours], other.color[theirs]) = (other.color[theirs], color[ours]);
+        (stain[ours], other.stain[theirs]) = (other.stain[theirs], stain[ours]);
         (hp[ours], other.hp[theirs]) = (other.hp[theirs], hp[ours]);
         (burnFireType[ours], other.burnFireType[theirs]) = (other.burnFireType[theirs], burnFireType[ours]);
+        (burningIntensity[ours], other.burningIntensity[theirs]) = (other.burningIntensity[theirs], burningIntensity[ours]);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -644,7 +662,51 @@ public class WorldChunk
         }
     }
 
-#endregion
+    public void ApplyStain(in int cellID, in Color stainColor, in float strength)
+    {
+        ShortColor current = stain[cellID];
+
+        float srcA = MathHelper.Clamp(strength, 0f, 1f);
+
+        float outARaw = Rubedo.Lib.Math.Mix(current.A, ShortColor.ALPHA_SCALE, srcA);
+
+        if (outARaw <= 0.5f)
+        {
+            stain[cellID] = ShortColor.Clear;
+            return;
+        }
+        else if (current.R == 0 && current.G == 0 && current.B == 0)
+        {
+            stain[cellID] = new ShortColor(
+                (ushort)MathF.Round(stainColor.R * ShortColor.PRECISION),
+                (ushort)MathF.Round(stainColor.G * ShortColor.PRECISION),
+                (ushort)MathF.Round(stainColor.B * ShortColor.PRECISION),
+                (ushort)MathF.Round(outARaw)
+            );
+        }
+        else
+        {
+            float outA = outARaw * ShortColor.INV_ALPHA_SCALE;
+            float blendWeight = srcA / outA;
+
+            float dstR = current.R * ShortColor.INV_PRECISION;
+            float dstG = current.G * ShortColor.INV_PRECISION;
+            float dstB = current.B * ShortColor.INV_PRECISION;
+
+            float outR = Rubedo.Lib.Math.Mix(dstR, stainColor.R, blendWeight);
+            float outG = Rubedo.Lib.Math.Mix(dstG, stainColor.G, blendWeight);
+            float outB = Rubedo.Lib.Math.Mix(dstB, stainColor.B, blendWeight);
+
+            stain[cellID] = new ShortColor(
+                (ushort)MathF.Round(outR * ShortColor.PRECISION),
+                (ushort)MathF.Round(outG * ShortColor.PRECISION),
+                (ushort)MathF.Round(outB * ShortColor.PRECISION),
+                (ushort)MathF.Round(outARaw)
+            );
+        }
+    }
+
+    #endregion
 
     public bool Draw(WorldRegion region, Camera camera, ref Color[] buffer)
     {
@@ -701,7 +763,21 @@ public class WorldChunk
                         }
                         else
                         {
-                            buffer[draw] = this.color[cellID];
+                            Color color = this.color[cellID];
+                            ShortColor s = stain[cellID];
+                            if (s.A > 0)
+                            {
+                                float t = s.A * ShortColor.INV_ALPHA_SCALE;
+                                Color stainRGB = new Color(
+                                    s.R * ShortColor.INV_PRECISION,
+                                    s.G * ShortColor.INV_PRECISION,
+                                    s.B * ShortColor.INV_PRECISION,
+                                    color.A
+                                );
+                                color = Color.Lerp(color, stainRGB, t);
+                            }
+
+                            buffer[draw] = color;
                         }
                     }
                 }
@@ -732,6 +808,7 @@ public class WorldChunk
     public struct Velocity
     {
         private const float SCALE = 1024f; // 2^10
+        private const float MAX_MAG = 31f; // clamp to avoid overflow
 
         private short rawX;
         private short rawY;
@@ -750,14 +827,14 @@ public class WorldChunk
 
         public float X
         {
-            readonly get => rawX / SCALE;
-            set => rawX = (short)(value * SCALE);
+            get => rawX / SCALE;
+            set => rawX = (short)(System.Math.Clamp(value, -MAX_MAG, MAX_MAG) * SCALE);
         }
 
         public float Y
         {
-            readonly get => rawY / SCALE;
-            set => rawY = (short)(value * SCALE);
+            get => rawY / SCALE;
+            set => rawY = (short)(System.Math.Clamp(value, -MAX_MAG, MAX_MAG) * SCALE);
         }
 
         public string ToNiceString(string format = "0.00")
@@ -781,7 +858,7 @@ public class WorldChunk
         public float Value
         {
             get => raw / SCALE;
-            set => raw = (short)(Math.Clamp(value, 0f, MAX) * SCALE);
+            set => raw = (short)(System.Math.Clamp(value, 0f, MAX) * SCALE);
         }
 
         public readonly short GetRaw() => raw;
@@ -793,5 +870,25 @@ public class WorldChunk
 
         public static implicit operator float(CellHP hp) => hp.Value;
         public static implicit operator CellHP(float value) => new CellHP { Value = value };
+    }
+
+    public readonly struct ShortColor
+    {
+        public const int PRECISION_SHIFT = 8;
+        public const int PRECISION = 1 << PRECISION_SHIFT; //256
+        public const float ALPHA_SCALE = PRECISION * 255f; // 65280
+
+        public const float INV_PRECISION = 1f / PRECISION;
+        public const float INV_ALPHA_SCALE = 1f / ALPHA_SCALE;
+
+        public readonly ushort R, G, B;
+        public readonly ushort A;
+
+        public ShortColor(ushort r, ushort g, ushort b, ushort a)
+        {
+            R = r; G = g; B = b; A = a;
+        }
+
+        public static readonly ShortColor Clear = default;  
     }
 }

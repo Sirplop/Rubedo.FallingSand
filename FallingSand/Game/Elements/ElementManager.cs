@@ -32,14 +32,14 @@ public static class ElementManager
 
     public const byte FIRE_SPAWN_CHANCE = 25; //chance fire spawns a fire cell above itself if it's empty.
     public const byte FIRE_EXTINQUISH_CHANCE = 25; //chance per frame fire is extinguished when buried.
-    public const byte FIRE_IGNITE_CHANCE = 16;
+    public const byte FIRE_IGNITE_CHANCE = 4;
 
     public const byte FIRE_MAX_INTENSITY = 15;
-    public const byte FIRE_INTENSITY_BASE_GAIN_CHANCE = 16;             // % per tick to gain intensity
-    public const byte FIRE_INTENSITY_GAIN_PER_AIR_NEIGHBOR = 12;        // % added per adjacent empty cell
-    public const byte FIRE_INTENSITY_GAIN_PER_NEIGHBOR_INTENSITY = 2;  // % added per avg point of neighbor intensity
-    public const byte FIRE_INTENSITY_BASE_LOSE_CHANCE = 6;             // % per tick, floor chance to cool off
-    public const byte FIRE_INTENSITY_LOSE_PER_MISSING_AIR = 6;         // % added per non-empty (smothering) neighbor
+    public const byte FIRE_INTENSITY_GAIN_CHANCE = 12;             // % per tick to gain intensity
+    public const byte FIRE_INTENSITY_GAIN_CHANCE_AIR = 8;        // % added per adjacent empty cell
+    public const byte FIRE_INTENSITY_GAIN_CHANCE_NEIGHBOR = 2;  // % added per avg point of neighbor intensity
+    public const byte FIRE_INTENSITY_LOSE_CHANCE = 6;             // % per tick, floor chance to cool off
+    public const byte FIRE_INTENSITY_LOSE_CHANCE_AIR = 6;         // % added per non-empty (smothering) neighbor
 
     public static bool Loaded { get; private set; }
 
@@ -63,6 +63,9 @@ public static class ElementManager
     public static string[] texture;             //Default texture for a material.
     public static bool[] isGradient;            //is this a gradient texture?
     public static Color[][] gradient_color;     //some elements change color over time, this is their gradient maps.
+
+    public static bool[] stains;                //does this element stain?
+    public static Color[] stainColor;           //what color does this element stain to?
 
     public static bool[]    liquid_isStatic;    //does this particle move
     public static bool[]    liquid_isSand;      //is this particle a powder, aka only moves downwards?
@@ -116,6 +119,9 @@ public static class ElementManager
         texture = new string[count];
         isGradient = new bool[count];
         gradient_color = new Color[count][];
+
+        stains = new bool[count];
+        stainColor = new Color[count];
 
         liquid_isStatic = new bool[count];
         liquid_isSand = new bool[count];
@@ -205,6 +211,9 @@ public static class ElementManager
                 gradient_color[i] = Array.Empty<Color>();
                 isGradient[i] = false;
             }
+
+            stains[i] = element.stains;
+            stainColor[i] = element.stainColor;
 
             liquid_isStatic[i] = element.liquid_isStatic;
             liquid_isSand[i] = element.liquid_isSand;
@@ -479,7 +488,6 @@ public static class ElementManager
 
     public static Color SampleGradient(int element, float life, ref Squirrel3 rnd)
     {
-        float timer = hp[element];
         switch (typeLookup[element])
         {
             case Type.EMPTY:
@@ -488,11 +496,22 @@ public static class ElementManager
             case Type.PHYSICS_SOLID:
                 break;
             case Type.FIRE:
+                float timer = hp[element];
                 int count = gradient_color[element].Length;
                 int colorIndex = Rubedo.Lib.Math.FloorToInt(Rubedo.Lib.Math.Mix(count - 1, 0, Rubedo.Lib.Math.Clamp(life / timer, 0, 1)));
                 Color color = gradient_color[element][colorIndex];
                 return color * rnd.Range(0.75f, 1.25f);
         }
         return Color.Pink; //MISSING GRADIENT
+    }
+
+    public static Color GetNewCellColor(int element, ref Squirrel3 rnd)
+    {
+        Color newColor = color[element];
+        float variation = rnd.Range(0.9f, 1.1f);
+        newColor.R = (byte)System.Math.Clamp(newColor.R * variation, 0, 255);
+        newColor.G = (byte)System.Math.Clamp(newColor.G * variation, 0, 255);
+        newColor.B = (byte)System.Math.Clamp(newColor.B * variation, 0, 255);
+        return newColor;
     }
 }

@@ -11,7 +11,7 @@ public class FallingSand : Rubedo.RubedoEngine
     public FallingSand() : base()
     {
         Graphics.SynchronizeWithVerticalRetrace = true; //vsync
-        Time.SetFixedDeltaTime(1f / 60f);
+        Time.SetFixedDeltaTime(1f / 50f);
     }
 
     protected override void LoadContent()

@@ -210,7 +210,10 @@ public class WorldState : GameState
                 WorldChunk.Moving moving = chunk.moving[cellID];
 
                 world.Text += $"\nVelocity: {velocity.ToNiceString("0.00")}" +
-                    $"\nFreefalling: {moving.IsMoving}, {moving.MovingCount}";
+                    $"\nFreefalling: {moving.IsMoving}, {moving.MovingCount}" +
+                    $"\nFire State:" +
+                    $"\n  - HP: {chunk.hp[cellID].Value}" +
+                    $"\n  - Fire Type: {ElementManager.internalName[chunk.burnFireType[cellID]]}";
             }
         }
     }

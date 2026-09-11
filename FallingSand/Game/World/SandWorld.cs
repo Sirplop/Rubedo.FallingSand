@@ -258,7 +258,7 @@ public class SandWorld : RenderableComponent
         moving.MovingCount = 0; //naughty naughty, mutating a struct...
 
         chunk.velocity[cellID].Zero();
-        chunk.color[cellID] = ElementManager.color[element] * rnd.Range(0.9f, 1.1f);
+        chunk.color[cellID] = ElementManager.GetNewCellColor(element, ref chunk.chunkRNG);
         chunk.hp[cellID].Value = ElementManager.hp[element];
 
         if (ElementManager.typeLookup[element] == ElementManager.Type.FIRE)
@@ -286,7 +286,7 @@ public class SandWorld : RenderableComponent
         moving.MovingCount = 0; //naughty naughty, mutating a struct...
 
         chunk.velocity[cellID].Zero();
-        chunk.color[cellID] = ElementManager.color[element] * rnd.Range(0.9f, 1.1f);
+        chunk.color[cellID] = ElementManager.GetNewCellColor(element, ref chunk.chunkRNG);
         chunk.hp[cellID].Value = ElementManager.hp[element];
 
         if (ElementManager.typeLookup[element] == ElementManager.Type.FIRE)

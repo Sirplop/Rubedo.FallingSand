@@ -3,7 +3,7 @@
 		"internalName": "acid",
 		"cellType": "liquid",
 		"colorCode": "ff33ff77",
-		"density": 0.9,
+		"density": 0.95,
 
 		"liquid_maxSpeed": 5,
 		"liquid_gravity": 1,

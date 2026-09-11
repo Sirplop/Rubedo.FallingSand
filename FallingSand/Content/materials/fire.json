@@ -10,6 +10,9 @@
     "fire_temperature": 150,
     "fire_fizzles": "smoke",
 
+    "stains": true,
+    "stain_color": "ff101010",
+
     "graphics": {
       "texture_file": "materials/fire_gradient.png",
       "is_gradient": true

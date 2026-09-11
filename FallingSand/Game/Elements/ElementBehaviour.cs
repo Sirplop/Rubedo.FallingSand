@@ -1,8 +1,12 @@
 ﻿using FallingSand.Game.World;
 using Microsoft.Xna.Framework;
 using Rubedo;
+using System;
+using System.Buffers.Text;
 using System.Runtime.CompilerServices;
+using System.Xml.Linq;
 using static FallingSand.Game.World.WorldChunk;
+using static System.Runtime.InteropServices.JavaScript.JSType;
 
 namespace FallingSand.Game.Elements;
 public static class ElementBehaviour
@@ -246,8 +250,8 @@ public static class ElementBehaviour
                 if (CellBehaviour.TryDiagonalUpSameChunk(in caller, in x, in y, ref cellID))
                     return;
             }
-            //if (CellBehaviour.TryMoveSideOneSameChunk(in caller, in x, in y, ref cellID))
-            //    return;
+            if (CellBehaviour.TryMoveSideOneSameChunk(in caller, in x, in y, ref cellID))
+                return;
 
             //only try to spawn more fire if this didn't move
             //if (caller.chunkRNG.Percent() < ElementManager.FIRE_SPAWN_CHANCE)
@@ -292,8 +296,8 @@ public static class ElementBehaviour
                 if (CellBehaviour.TryDiagonalUp(ref callerNonRef, in x, in y, ref cellID))
                     return;
             }
-            //if (CellBehaviour.TryMoveSideOne(ref callerNonRef, in x, in y, ref cellID))
-            //    return;
+            if (CellBehaviour.TryMoveSideOne(ref callerNonRef, in x, in y, ref cellID))
+                return;
 
             //only try to spawn more fire if this didn't move
             //if (caller.chunkRNG.Percent() < ElementManager.FIRE_SPAWN_CHANCE)
@@ -320,15 +324,27 @@ public static class ElementBehaviour
             caller.color[cellID] = ElementManager.colorCode[ElementManager.EMPTY];
             caller.hp[cellID].Zero();
             caller.burnFireType[cellID] = ElementManager.EMPTY;
+            caller.burningIntensity[cellID] = 0;
             return;
         }
         caller.hp[cellID].Value = timer;
 
-        /*
-        Color c = caller.color[cellID];
-        float d = 1f / ElementManager.fire_burnTime[elementID];
-        caller.color[cellID] = new Color((byte)(c.R * d), (byte)(c.G * d), (byte)(c.B * d), c.A);
-        */
+        //only powders get darkened.
+        if (ElementManager.liquid_isSand[elementID])
+        {
+            const float RATE = 0.3f;
+
+            float baseHP = ElementManager.hp[elementID];
+            float burnFractionNow = RATE - (timer / baseHP);
+            float burnFractionPrev = RATE - ((timer + Time.FixedDeltaTime) / baseHP);
+
+            float darkenNow = RATE - burnFractionNow * 0.7f;
+            float darkenPrev = System.Math.Max(RATE - burnFractionPrev * 0.7f, 0.0001f);
+
+            float ratio = Math.Max(darkenNow / darkenPrev, 1f / 255f);
+
+            caller.ApplyStain(in cellID, ElementManager.stainColor[elementID], 1f - ratio);
+        }
 
         if (IsNotBorderCellFire(x - caller.chunkX, y - caller.chunkY, in caller.size))
         {
@@ -358,9 +374,10 @@ public static class ElementBehaviour
     {
         int result = ElementManager.fire_fizzle[fireType];
         caller.element[cellID] = result;
-        caller.color[cellID] = ElementManager.color[result] * caller.chunkRNG.Range(0.9f, 1.1f);
+        caller.color[cellID] = ElementManager.GetNewCellColor(result, ref caller.chunkRNG);
         caller.hp[cellID].Value = ElementManager.hp[result];
         caller.burnFireType[cellID] = ElementManager.EMPTY;
+        caller.burningIntensity[cellID] = 0;
         caller.ThreadEnvelop(cellID);
     }
     private static void FireBuried(in WorldChunk caller, in int cellID)
@@ -369,6 +386,7 @@ public static class ElementBehaviour
         caller.color[cellID] = Color.Transparent;
         caller.hp[cellID].Zero();
         caller.burnFireType[cellID] = ElementManager.EMPTY;
+        caller.burningIntensity[cellID] = 0;
         caller.velocity[cellID].Zero();
         caller.moving[cellID] = new WorldChunk.Moving();
     }
@@ -376,5 +394,6 @@ public static class ElementBehaviour
     private static void BurningBuried(in WorldChunk caller, in int cellID)
     {
         caller.burnFireType[cellID] = ElementManager.EMPTY;
+        caller.burningIntensity[cellID] = 0;
     }
 }

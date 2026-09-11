@@ -24,6 +24,7 @@
 		"colorCode": "ff231f1a",
 		"density": 30,
 		"liquid_inertialResistance": 85,
+		"hp": 20,
 
 		"fire_temperature": 100,
 		"fire_requiresAir": true,

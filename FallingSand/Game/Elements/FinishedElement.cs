@@ -26,6 +26,9 @@ public class FinishedElement
     public string textureTarget = ""; //draw from a texture?
     public bool isGradient = false; //is the texture a gradient texture?
 
+    public Color stainColor = Color.Transparent;
+    public bool stains = false;
+
     public bool liquid_isStatic = false; //does this particle move
     public bool liquid_isSand = false; //is this particle a powder, aka only moves downwards?
 

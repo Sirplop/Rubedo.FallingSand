@@ -42,5 +42,21 @@
 		"graphics": {
 			"color": "ffa52201"
 		}
+	},
+	{
+		"parent": "water",
+		"inheritReactions": false,
+		"internalName": "oil",
+		"colorCode": "ff201c13",
+		"density": 0.9,
+
+		"hp": 5,
+		"liquid_inertialResistance": 85,
+
+		"fire_temperature": 50,
+
+		"graphics": {
+			"color": "ff201c13"
+		}
 	}
 ]

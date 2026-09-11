@@ -27,6 +27,9 @@ public class ProtoElement : FinishedElement
     public bool def_texture = false;
     public bool def_isGradient = false;
 
+    public bool def_stains = false;
+    public bool def_stain_color = false;
+
     public bool def_liquid_isStatic = false;
     public bool def_liquid_isSand = false;
 
@@ -54,6 +57,8 @@ public class ProtoElement : FinishedElement
         element.color = def_color ? color : colorCode;
         element.textureTarget = textureTarget;
         element.isGradient = isGradient;
+        element.stains = stains;
+        element.stainColor = stainColor;
         element.liquid_isStatic = liquid_isStatic;
         element.liquid_isSand = liquid_isSand;
         element.liquid_maxSpeed = liquid_maxSpeed;
@@ -115,6 +120,9 @@ public class ProtoElement : FinishedElement
         element.color = def_color ? color : parentElement.color;
         element.textureTarget = def_texture ? textureTarget : parentElement.textureTarget;
         element.isGradient = def_isGradient ? isGradient : parentElement.isGradient;
+
+        element.stains = def_stains ? stains : parentElement.stains;
+        element.stainColor = def_stain_color ? stainColor : parentElement.stainColor;
 
         element.density = def_density ? density : parentElement.density;
         element.hp = def_hp ? hp : parentElement.hp;

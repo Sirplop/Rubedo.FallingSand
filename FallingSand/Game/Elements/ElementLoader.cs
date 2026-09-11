@@ -184,6 +184,23 @@ public static class ElementLoader
                 }
             }
 
+            if (CheckValue(jsonObj, "stains", out element.stains))
+            {
+                element.def_stains = true;
+            }
+            if (CheckValue(jsonObj, "stain_color", out string stainColor))
+            {
+                try
+                {
+                    element.stainColor = Rubedo.Lib.Extensions.ColorExtensions.FromHexARGB(stainColor);
+                    element.def_stain_color = true;
+                }
+                catch
+                {
+                    throw new ContentLoadException($"Element file '{path}', element '{element.internalName}', has a malformed stain color!");
+                }
+            }
+
             if (CheckValue(jsonObj, "parent", out string parent))
             {
                 element.parent = parent;

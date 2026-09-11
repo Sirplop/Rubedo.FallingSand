@@ -848,7 +848,7 @@ public static class CellBehaviour
         if (velocity.X != 0)
         {
             int dir = System.Math.Sign(velocity.X);
-            velocity.X += dir;
+            velocity.X = dir;
 
             int targetX = x + dir;
             if (caller.TryGetCell(targetX, y, out WorldChunk container, out int otherID))
@@ -1281,6 +1281,8 @@ public static class CellBehaviour
             caller.element[targetID] = reaction.outputCell2;
             caller.color[actorID] = ElementManager.colorCode[reaction.outputCell1] * caller.chunkRNG.Range(0.9f, 1.1f);
             caller.color[targetID] = ElementManager.colorCode[reaction.outputCell2] * caller.chunkRNG.Range(0.9f, 1.1f);
+            caller.hp[actorID] = ElementManager.hp[reaction.outputCell1];
+            caller.hp[targetID] = ElementManager.hp[reaction.outputCell2];
             caller.SetMoving(actorID, reaction.outputCell1);
             caller.SetMoving(targetID, reaction.outputCell2);
             return true;
@@ -1305,6 +1307,8 @@ public static class CellBehaviour
             targetChunk.element[targetID] = reaction.outputCell2;
             caller.color[actorID] = ElementManager.colorCode[reaction.outputCell1] * caller.chunkRNG.Range(0.9f, 1.1f);
             targetChunk.color[targetID] = ElementManager.colorCode[reaction.outputCell2] * caller.chunkRNG.Range(0.9f, 1.1f);
+            caller.hp[actorID] = ElementManager.hp[reaction.outputCell1];
+            targetChunk.hp[targetID] = ElementManager.hp[reaction.outputCell2];
             caller.SetMoving(actorID, reaction.outputCell1);
             targetChunk.SetMoving(targetID, reaction.outputCell2);
             return true;
@@ -1361,10 +1365,10 @@ public static class CellBehaviour
                 if (tempMargin <= 0)
                     continue; // this fire isn't hot enough to catch this fuel at all
 
-                int catchChance = Rubedo.Lib.Math.Clamp(tempMargin, 1, 100);
-                if (caller.chunkRNG.Range(0f, 100f) < catchChance * 0.1 * intensity)
+                if (caller.chunkRNG.Range(0f, 100f) < tempMargin * tempMargin * 0.001 * intensity)
                 {
                     containing.burnFireType[nID] = fireType;
+                    containing.burningIntensity[nID] = (byte)Math.Clamp(intensity - 1, 0, ElementManager.FIRE_MAX_INTENSITY); ;
                     containing.ThreadEnvelop(nID);
                 }
             }
@@ -1391,10 +1395,10 @@ public static class CellBehaviour
             if (tempMargin <= 0)
                 continue; // this fire isn't hot enough to catch this fuel at all
 
-            int catchChance = Rubedo.Lib.Math.Clamp(tempMargin, 1, 100);
-            if (caller.chunkRNG.Range(0f, 100f) < catchChance * 0.1 * intensity)
+            if (caller.chunkRNG.Range(0f, 100f) < tempMargin * tempMargin * 0.001 * intensity)
             {
                 caller.burnFireType[nID] = fireType;
+                caller.burningIntensity[nID] = (byte)Math.Clamp(intensity - 2, 0, ElementManager.FIRE_MAX_INTENSITY);
                 caller.ThreadEnvelop(nID);
             }
         }
@@ -1497,18 +1501,20 @@ public static class CellBehaviour
         byte ourIntensity = caller.burningIntensity[cellID];
 
         // chance to gain a point of intensity this tick
-        int gainChance = ElementManager.FIRE_INTENSITY_BASE_GAIN_CHANCE
-                       + avgIntensity * ElementManager.FIRE_INTENSITY_GAIN_PER_NEIGHBOR_INTENSITY;
+        int gainChance = ElementManager.FIRE_INTENSITY_GAIN_CHANCE
+                       + avgIntensity * ElementManager.FIRE_INTENSITY_GAIN_CHANCE_NEIGHBOR;
         if (requiresAir)
-            gainChance += airNeighbors * ElementManager.FIRE_INTENSITY_GAIN_PER_AIR_NEIGHBOR;
+            gainChance += airNeighbors * ElementManager.FIRE_INTENSITY_GAIN_CHANCE_AIR;
+        else
+            gainChance += 8 * ElementManager.FIRE_INTENSITY_GAIN_CHANCE_AIR;
 
         if (ourIntensity < ElementManager.FIRE_MAX_INTENSITY && caller.chunkRNG.Percent() < gainChance)
             ourIntensity++;
 
         // chance to lose a point of intensity this tick
-        int loseChance = ElementManager.FIRE_INTENSITY_BASE_LOSE_CHANCE;
+        int loseChance = ElementManager.FIRE_INTENSITY_LOSE_CHANCE;
         if (requiresAir)
-            loseChance += (8 - airNeighbors) * ElementManager.FIRE_INTENSITY_LOSE_PER_MISSING_AIR;
+            loseChance += (8 - airNeighbors) * ElementManager.FIRE_INTENSITY_LOSE_CHANCE_AIR;
 
         if (ourIntensity > 0 && caller.chunkRNG.Percent() < loseChance)
             ourIntensity--;
@@ -1549,18 +1555,20 @@ public static class CellBehaviour
         byte ourIntensity = caller.burningIntensity[cellID];
 
         // chance to gain a point of intensity this tick
-        int gainChance = ElementManager.FIRE_INTENSITY_BASE_GAIN_CHANCE
-                       + avgIntensity * ElementManager.FIRE_INTENSITY_GAIN_PER_NEIGHBOR_INTENSITY;
+        int gainChance = ElementManager.FIRE_INTENSITY_GAIN_CHANCE
+                       + avgIntensity * ElementManager.FIRE_INTENSITY_GAIN_CHANCE_NEIGHBOR;
         if (requiresAir)
-            gainChance += airNeighbors * ElementManager.FIRE_INTENSITY_GAIN_PER_AIR_NEIGHBOR;
+            gainChance += airNeighbors * ElementManager.FIRE_INTENSITY_GAIN_CHANCE_AIR;
+        else
+            gainChance += 8 * ElementManager.FIRE_INTENSITY_GAIN_CHANCE_AIR;
 
         if (ourIntensity < ElementManager.FIRE_MAX_INTENSITY && caller.chunkRNG.Percent() < gainChance)
             ourIntensity++;
 
         // chance to lose a point of intensity this tick
-        int loseChance = ElementManager.FIRE_INTENSITY_BASE_LOSE_CHANCE;
+        int loseChance = ElementManager.FIRE_INTENSITY_LOSE_CHANCE;
         if (requiresAir)
-            loseChance += (8 - airNeighbors) * ElementManager.FIRE_INTENSITY_LOSE_PER_MISSING_AIR;
+            loseChance += (8 - airNeighbors) * ElementManager.FIRE_INTENSITY_LOSE_CHANCE_AIR;
 
         if (ourIntensity > 0 && caller.chunkRNG.Percent() < loseChance)
             ourIntensity--;
