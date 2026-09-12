@@ -28,6 +28,7 @@ public class FinishedElement
 
     public Color stainColor = Color.Transparent;
     public bool stains = false;
+    public bool canBeStained = false;
 
     public bool liquid_isStatic = false; //does this particle move
     public bool liquid_isSand = false; //is this particle a powder, aka only moves downwards?
@@ -39,8 +40,9 @@ public class FinishedElement
     public byte liquid_friction = 40; //how fast does this element slow down?
 
     public byte fire_temperature = 0;           // 0 is fireproof. Difference between fire and fuel's value determines spread speed.
-    public float fire_burnTime = 0;              // seconds until this fuel is consumed or the fire fizzles
     public bool fire_requiresAir = true;           // does this material require air to burn?
 
     public string fire_fizzle = "";                // what a fire cell becomes at end of life
+
+    public float lifetime = 0;                     // lifetime in seconds. 0 means the cell exists forever.
 }

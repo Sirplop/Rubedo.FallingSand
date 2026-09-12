@@ -4,10 +4,12 @@
 using FallingSand.Game.Elements;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics.PackedVector;
+using Rubedo;
 using Rubedo.Graphics;
 using Rubedo.Lib;
 using System;
 using System.Runtime.CompilerServices;
+using System.Security.Cryptography;
 using System.Text;
 
 namespace FallingSand.Game.World;
@@ -34,12 +36,14 @@ public class WorldChunk
     public readonly Color[] color;          //4 bytes
     public readonly ShortColor[] stain;     //8 bytes
     public readonly CellHP[] hp;            //2 bytes
+    public readonly float[] lifetime;       //4 bytes, remaining lifetime in seconds. 0 means no lifetime.
 
     public readonly int[] burnFireType;         // element id of the Type.FIRE flavor currently burning this cell
     public readonly byte[] burningIntensity;    // how intensely is this fire burning? Impacts ignition chance and fire spawn chance.
 
     public readonly bool[] dirtyRectStep;
     public readonly bool[] movedWithFrame;
+    public readonly bool[] fireTick;
 
     public ref Rectangle DirtyRect => ref dirtyRect;
     public ref Rectangle RenderRect => ref renderRect;
@@ -89,10 +93,12 @@ public class WorldChunk
         color = new Color[indexSize];
         stain = new ShortColor[indexSize];
         hp = new CellHP[indexSize];
+        lifetime = new float[indexSize];
         burnFireType = new int[indexSize];
         burningIntensity = new byte[indexSize];
 
         movedWithFrame = new bool[indexSize];
+        fireTick = new bool[indexSize];
 
         renderRect = new Rectangle(chunkX, chunkY, size, size);
 
@@ -113,11 +119,12 @@ public class WorldChunk
     }
     #region Multithreaded
     bool flip = true;
-    private void ResetMovedWithFrame()
+    private void ResetFrameFlags()
     {
         for (int i = 0; i < indexSize; i++)
         {
             movedWithFrame[i] = false;
+            fireTick[i] = false;
         }
     }
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -129,7 +136,7 @@ public class WorldChunk
     public void MultithreadSetup(SandWorld matrix)
     {
         gravity = matrix.gravity;
-        ResetMovedWithFrame();
+        ResetFrameFlags();
 
         flip = !flip;
 
@@ -161,12 +168,24 @@ public class WorldChunk
         if (elementID == ElementManager.EMPTY)
             return;
 
+        if (lifetime[cellID] > 0)
+        {
+            float remaining = lifetime[cellID] - Time.FixedDeltaTime;
+            if (remaining <= 0)
+            {
+                parentMatrix.ClearCell(this, cellID);
+                return;
+            }
+            lifetime[cellID] = remaining;
+        }
+
         ElementManager.Type elementType = ElementManager.typeLookup[elementID];
         switch (elementType)
         {
             case ElementManager.Type.LIQUID:
-                if (burnFireType[cellID] != 0)
+                if (burnFireType[cellID] != 0 && !fireTick[cellID])
                 {
+                    fireTick[cellID] = true;
                     ElementBehaviour.StepBurning(this, in x, in y, cellID, in elementID);
                     int nelementID = element[cellID]; // may have changed (e.g. to ash)
                     if (nelementID == ElementManager.EMPTY)
@@ -175,8 +194,9 @@ public class WorldChunk
                 ElementBehaviour.StepLiquid(this, in x, in y, cellID, in elementID);
                 break;
             case ElementManager.Type.GAS:
-                if (burnFireType[cellID] != 0)
+                if (burnFireType[cellID] != 0 && !fireTick[cellID])
                 {
+                    fireTick[cellID] = true;
                     ElementBehaviour.StepBurning(this, in x, in y, cellID, in elementID);
                     int nelementID = element[cellID]; // may have changed (e.g. to ash)
                     if (nelementID == ElementManager.EMPTY)
@@ -185,7 +205,11 @@ public class WorldChunk
                 ElementBehaviour.StepGas(this, in x, in y, cellID, in elementID);
                 break;
             case ElementManager.Type.FIRE:
-                ElementBehaviour.StepFire(this, in x, in y, cellID, in elementID);
+                if (!fireTick[cellID])
+                {
+                    fireTick[cellID] = true;
+                    ElementBehaviour.StepFire(this, in x, in y, cellID, in elementID);
+                }
                 break;
             case ElementManager.Type.PHYSICS_SOLID:
                 break;
@@ -203,9 +227,6 @@ public class WorldChunk
         int finX = Rubedo.Lib.Math.Clamp(dirtyRect.Right, chunkX, chunkX + size);
         int dirtyY = Rubedo.Lib.Math.Clamp(dirtyRect.Y, chunkY, chunkY + size);
         int finY = Rubedo.Lib.Math.Clamp(dirtyRect.Bottom, chunkY, chunkY + size);
-
-        var localElementArray = this.element;
-        var localMovedWithFrame = this.movedWithFrame;
 
 #if USE_ALTERNATING_UPDATE
         //bool sectionFlip = flip;
@@ -230,10 +251,10 @@ public class WorldChunk
                     for (int x = finX - 1 - xStart; x >= dirtyX; x -= 2)
                     {
                         int cellID = yIndex + (x - chunkX);
-                        bool moved = localMovedWithFrame[cellID];
+                        bool moved = movedWithFrame[cellID];
                         if (!moved)
                         {
-                            ProcessCell(in x, in y, in cellID, in localElementArray[cellID]);
+                            ProcessCell(in x, in y, in cellID, in element[cellID]);
                         }
                     }
                 }
@@ -242,10 +263,10 @@ public class WorldChunk
                     for (int x = dirtyX + xStart; x < finX; x += 2)
                     {
                         int cellID = yIndex + (x - chunkX);
-                        bool moved = localMovedWithFrame[cellID];
+                        bool moved = movedWithFrame[cellID];
                         if (!moved)
                         {
-                            ProcessCell(in x, in y, in cellID, in localElementArray[cellID]);
+                            ProcessCell(in x, in y, in cellID, in element[cellID]);
                         }
                     }
                 }
@@ -264,10 +285,10 @@ public class WorldChunk
                     for (int x = finX - 1; x >= dirtyX; x--)
                     {
                         int cellID = yIndex + (x - chunkX);
-                        bool moved = localMovedWithFrame[cellID];
+                        bool moved = movedWithFrame[cellID];
                         if (!moved)
                         {
-                            ProcessCell(in x, in y, in cellID, in localElementArray[cellID]);
+                            ProcessCell(in x, in y, in cellID, in element[cellID]);
                         }
                     }
                 }
@@ -276,10 +297,10 @@ public class WorldChunk
                     for (int x = dirtyX; x < finX; x++)
                     {
                         int cellID = yIndex + (x - chunkX);
-                        bool moved = localMovedWithFrame[cellID];
+                        bool moved = movedWithFrame[cellID];
                         if (!moved)
                         {
-                            ProcessCell(in x, in y, in cellID, in localElementArray[cellID]);
+                            ProcessCell(in x, in y, in cellID, in element[cellID]);
                         }
                     }
                 }
@@ -490,6 +511,7 @@ public class WorldChunk
         (color[actor], color[target]) = (color[target], color[actor]);
         (stain[actor], stain[target]) = (stain[target], stain[actor]);
         (hp[actor], hp[target]) = (hp[target], hp[actor]);
+        (lifetime[actor], lifetime[target]) = (lifetime[target], lifetime[actor]);
         (burnFireType[actor], burnFireType[target]) = (burnFireType[target], burnFireType[actor]);
         (burningIntensity[actor], burningIntensity[target]) = (burningIntensity[target], burningIntensity[actor]);
     }
@@ -507,6 +529,7 @@ public class WorldChunk
         (color[ours], other.color[theirs]) = (other.color[theirs], color[ours]);
         (stain[ours], other.stain[theirs]) = (other.stain[theirs], stain[ours]);
         (hp[ours], other.hp[theirs]) = (other.hp[theirs], hp[ours]);
+        (lifetime[ours], other.lifetime[theirs]) = (other.lifetime[theirs], lifetime[ours]);
         (burnFireType[ours], other.burnFireType[theirs]) = (other.burnFireType[theirs], burnFireType[ours]);
         (burningIntensity[ours], other.burningIntensity[theirs]) = (other.burningIntensity[theirs], burningIntensity[ours]);
     }
@@ -755,11 +778,11 @@ public class WorldChunk
                         int fireElement = this.burnFireType[cellID];
                         if (ElementManager.isGradient[element])
                         {
-                            buffer[draw] = ElementManager.SampleGradient(element, hp[cellID], ref chunkRNG);
+                            buffer[draw] = ElementManager.SampleGradient(in element, hp[cellID] / ElementManager.hp[element], ref chunkRNG);
                         }
                         else if (ElementManager.isGradient[fireElement])
                         {
-                            buffer[draw] = ElementManager.SampleGradient(fireElement, hp[cellID], ref chunkRNG);
+                            buffer[draw] = ElementManager.SampleGradient(in fireElement, chunkRNG.Value() * 0.5f + 0.5f, ref chunkRNG);
                         }
                         else
                         {
@@ -769,9 +792,9 @@ public class WorldChunk
                             {
                                 float t = s.A * ShortColor.INV_ALPHA_SCALE;
                                 Color stainRGB = new Color(
-                                    s.R * ShortColor.INV_PRECISION,
-                                    s.G * ShortColor.INV_PRECISION,
-                                    s.B * ShortColor.INV_PRECISION,
+                                    (byte)(s.R * ShortColor.INV_PRECISION),
+                                    (byte)(s.G * ShortColor.INV_PRECISION),
+                                    (byte)(s.B * ShortColor.INV_PRECISION),
                                     color.A
                                 );
                                 color = Color.Lerp(color, stainRGB, t);
@@ -889,6 +912,6 @@ public class WorldChunk
             R = r; G = g; B = b; A = a;
         }
 
-        public static readonly ShortColor Clear = default;  
+        public static readonly ShortColor Clear = new ShortColor(0, 0, 0, 0);  
     }
 }

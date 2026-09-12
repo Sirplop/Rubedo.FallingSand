@@ -39,11 +39,30 @@ public static class CellBehaviour
 
     public static readonly (int dx, int dy)[] Neighbors8 =
     {
-        (-1,-1),(0,-1),(1,-1),
-        (-1, 0),        (1, 0),
-        (-1, 1),(0, 1),(1, 1)
+        (-1, 1),(0, 1),(1, 1),
+        (-1, 0),       (1, 0),
+        (-1,-1),(0,-1),(1,-1)
     };
 
+    public static readonly (int dx, int dy)[] Neighbors25 =
+    {
+        (-2, 2),(-1, 2),(0, 2),(1, 2),(2, 2),
+        (-2, 1),(-1, 1),(0, 1),(1, 1),(2, 1),
+        (-2, 0),(-1, 0),(0, 0),(1, 0),(2, 0),
+        (-2,-1),(-1,-1),(0,-1),(1,-1),(2,-1),
+        (-2,-2),(-1,-2),(0,-2),(1,-2),(2,-2)
+    };
+    public static readonly int[][] Neighbors25Index =
+    {
+        [0,  1,  2,  5,  7,  10, 11, 12], // halo of (-1, 1)
+        [1,  2,  3,  6,  8,  11, 12, 13], // halo of ( 0, 1)
+        [2,  3,  4,  7,  9,  12, 13, 14], // halo of ( 1, 1)
+        [5,  6,  7,  10, 12, 15, 16, 17], // halo of (-1, 0)
+        [7,  8,  9,  12, 14, 17, 18, 19], // halo of ( 1, 0)
+        [10, 11, 12, 15, 17, 20, 21, 22], // halo of (-1,-1)
+        [11, 12, 13, 16, 18, 21, 22, 23], // halo of ( 0,-1)
+        [12, 13, 14, 17, 19, 22, 23, 24], // halo of ( 1,-1)
+    };
     /// <summary>
     /// Version of CanBeSwapped that guarantees the target and actor are in the same chunk.
     /// </summary>
@@ -1235,7 +1254,9 @@ public static class CellBehaviour
                         else
                         {
                             SwapForDensities(in caller, in x1, in y1, ref actorID, in x2, in y2, in targetID);
-                            if (actorType == ElementManager.Type.GAS || (actorType == ElementManager.Type.LIQUID && !ElementManager.liquid_isSand[actorElement]))
+                            if (actorType == ElementManager.Type.GAS ||
+                                (actorType == ElementManager.Type.LIQUID && !ElementManager.liquid_isSand[actorElement]) ||
+                                actorType == ElementManager.Type.FIRE)
                             {
                                 return ActResult.Move; //fluids can move fast through other fluids and gasses.
                             }
@@ -1279,10 +1300,12 @@ public static class CellBehaviour
         {
             caller.element[actorID] = reaction.outputCell1;
             caller.element[targetID] = reaction.outputCell2;
-            caller.color[actorID] = ElementManager.colorCode[reaction.outputCell1] * caller.chunkRNG.Range(0.9f, 1.1f);
-            caller.color[targetID] = ElementManager.colorCode[reaction.outputCell2] * caller.chunkRNG.Range(0.9f, 1.1f);
+            caller.color[actorID] = ElementManager.GetNewCellColor(reaction.outputCell1, ref caller.chunkRNG);
+            caller.color[targetID] = ElementManager.GetNewCellColor(reaction.outputCell2, ref caller.chunkRNG);
             caller.hp[actorID] = ElementManager.hp[reaction.outputCell1];
             caller.hp[targetID] = ElementManager.hp[reaction.outputCell2];
+            caller.lifetime[actorID] = ElementManager.lifetime[reaction.outputCell1];
+            caller.lifetime[targetID] = ElementManager.lifetime[reaction.outputCell2];
             caller.SetMoving(actorID, reaction.outputCell1);
             caller.SetMoving(targetID, reaction.outputCell2);
             return true;
@@ -1305,10 +1328,12 @@ public static class CellBehaviour
         {
             caller.element[actorID] = reaction.outputCell1;
             targetChunk.element[targetID] = reaction.outputCell2;
-            caller.color[actorID] = ElementManager.colorCode[reaction.outputCell1] * caller.chunkRNG.Range(0.9f, 1.1f);
-            targetChunk.color[targetID] = ElementManager.colorCode[reaction.outputCell2] * caller.chunkRNG.Range(0.9f, 1.1f);
+            caller.color[actorID] = ElementManager.GetNewCellColor(reaction.outputCell1, ref caller.chunkRNG);
+            targetChunk.color[targetID] = ElementManager.GetNewCellColor(reaction.outputCell2, ref targetChunk.chunkRNG);
             caller.hp[actorID] = ElementManager.hp[reaction.outputCell1];
             targetChunk.hp[targetID] = ElementManager.hp[reaction.outputCell2];
+            caller.lifetime[actorID] = ElementManager.lifetime[reaction.outputCell1];
+            targetChunk.lifetime[targetID] = ElementManager.lifetime[reaction.outputCell2];
             caller.SetMoving(actorID, reaction.outputCell1);
             targetChunk.SetMoving(targetID, reaction.outputCell2);
             return true;
@@ -1347,6 +1372,36 @@ public static class CellBehaviour
     {
         byte fireTemp = ElementManager.fire_temperature[fireType];
 
+        Span<int> hasAir = stackalloc int[25];
+        bool requiresAir = ElementManager.fire_requiresAir[fireType];
+        int intensityLimit = requiresAir ? 1 : 0;
+
+        if (requiresAir)
+        {
+            for (int i = 0; i < 25; i++) //scan for air
+            {
+                if (i == 12)
+                {
+                    hasAir[i] = 0; //this is the burning cell!
+                    continue;
+                }
+                (int dx, int dy) = Neighbors25[i];
+                if (caller.TryGetCell(x + dx, y + dy, out WorldChunk containing, out int nID))
+                {
+                    int nElement = containing.element[nID];
+                    hasAir[i] = nElement == ElementManager.EMPTY || nElement == fireType ? 1 : 0;
+                }
+            }
+        }
+        else
+        {
+            for (int i = 0; i < 25; i++)
+            {
+                hasAir[i] = 1; //always considered air.
+            }
+            hasAir[12] = 0; //center is never air.
+        }
+
         for (int i = 0; i < Neighbors8.Length; i++)
         {
             (int dx, int dy) = Neighbors8[i];
@@ -1365,11 +1420,20 @@ public static class CellBehaviour
                 if (tempMargin <= 0)
                     continue; // this fire isn't hot enough to catch this fuel at all
 
-                if (caller.chunkRNG.Range(0f, 100f) < tempMargin * tempMargin * 0.001 * intensity)
+                int airCount = 0;
+                for (int v = 0; v < 8; v++)
+                {
+                    airCount += hasAir[Neighbors25Index[i][v]];
+                }
+                float airFactor = airCount + 12f;
+                float chance = tempMargin * 0.0075f * intensity * airFactor;
+
+                if (caller.chunkRNG.Range(0f, 100f) < chance)
                 {
                     containing.burnFireType[nID] = fireType;
-                    containing.burningIntensity[nID] = (byte)Math.Clamp(intensity - 1, 0, ElementManager.FIRE_MAX_INTENSITY); ;
+                    containing.burningIntensity[nID] = (byte)Math.Clamp(intensity - 2, intensityLimit, ElementManager.FIRE_MAX_INTENSITY);
                     containing.ThreadEnvelop(nID);
+                    containing.fireTick[nID] = true;
                 }
             }
         }
@@ -1378,7 +1442,34 @@ public static class CellBehaviour
     {
         byte fireTemp = ElementManager.fire_temperature[fireType];
 
-        for (int i = 0; i < Neighbors8.Length; i++)
+        Span<int> hasAir = stackalloc int[25];
+        bool requiresAir = ElementManager.fire_requiresAir[fireType];
+        int intensityLimit = requiresAir ? 1 : 0;
+        if (requiresAir)
+        {
+            for (int i = 0; i < 25; i++) //scan for air
+            {
+                if (i == 12)
+                {
+                    hasAir[i] = 0; //this is the burning cell!
+                    continue;
+                }
+                (int dx, int dy) = Neighbors25[i];
+                int nID = caller.GetCellIndex(x + dx, y + dy);
+                int nElement = caller.element[nID];
+                hasAir[i] = nElement == ElementManager.EMPTY || nElement == fireType ? 1 : 0;
+            }
+        }
+        else
+        {
+            for (int i = 0; i < 25; i++)
+            {
+                hasAir[i] = 1; //always considered air.
+            }
+            hasAir[12] = 0; //center is never air.
+        }
+
+        for (int i = 0; i < 8; i++)
         {
             (int dx, int dy) = Neighbors8[i];
             int nID = caller.GetCellIndex(x + dx, y + dy);
@@ -1395,85 +1486,108 @@ public static class CellBehaviour
             if (tempMargin <= 0)
                 continue; // this fire isn't hot enough to catch this fuel at all
 
-            if (caller.chunkRNG.Range(0f, 100f) < tempMargin * tempMargin * 0.001 * intensity)
+            int airCount = 0;
+            for (int v = 0; v < 8; v++)
+            {
+                airCount += hasAir[Neighbors25Index[i][v]];
+            }
+            float airFactor = airCount + 12f;
+            float chance = tempMargin * 0.0075f * intensity * airFactor;
+
+            if (caller.chunkRNG.Range(0f, 100f) < chance)
             {
                 caller.burnFireType[nID] = fireType;
-                caller.burningIntensity[nID] = (byte)Math.Clamp(intensity - 2, 0, ElementManager.FIRE_MAX_INTENSITY);
+                caller.burningIntensity[nID] = (byte)Math.Clamp(intensity - 2, intensityLimit, ElementManager.FIRE_MAX_INTENSITY);
                 caller.ThreadEnvelop(nID);
+                caller.fireTick[nID] = true;
             }
         }
     }
-    public static bool FireIsExtinguished(in WorldChunk caller, in int x, in int y)
+    public static bool FireIsExtinguished(in WorldChunk caller, in int elementID, in int x, in int y)
     {
+        int smoke = ElementManager.fire_fizzle[elementID];
         for (int i = 0; i < Neighbors8.Length; i++)
         {
             (int dx, int dy) = Neighbors8[i];
             if (caller.TryGetCell(x + dx, y + dy, out WorldChunk containing, out int nID))
             {
                 int nElement = containing.element[nID];
-                if (nElement == ElementManager.EMPTY)
+                if (nElement == ElementManager.EMPTY || nElement == smoke)
                     return false; // we have air!
             }
         }
         return caller.chunkRNG.Percent() < ElementManager.FIRE_EXTINQUISH_CHANCE;
     }
-    public static bool FireIsExtinguishedSameChunk(in WorldChunk caller, in int x, in int y)
+    public static bool FireIsExtinguishedSameChunk(in WorldChunk caller, in int elementID, in int x, in int y)
     {
+        int smoke = ElementManager.fire_fizzle[elementID];
+
         for (int i = 0; i < Neighbors8.Length; i++)
         {
             (int dx, int dy) = Neighbors8[i];
             int nID = caller.GetCellIndex(x + dx, y + dy);
             int nElement = caller.element[nID];
 
-            if (nElement == ElementManager.EMPTY)
+            if (nElement == ElementManager.EMPTY || nElement == smoke)
                 return false; // we have air!
         }
         return caller.chunkRNG.Percent() < ElementManager.FIRE_EXTINQUISH_CHANCE;
     }
 
     //try to spawn fire left, right, and up
-    public static void TrySpawnFlameAround(in WorldChunk caller, in int x, in int y, in int fireType)
+    public static void TrySpawnFlameAround(in WorldChunk caller, in int x, in int y, in int fireType, in byte intensity)
     {
+        byte spawnIntensity = (byte)Math.Max(0, intensity - 1);
         if (caller.TryGetCell(x, y + 1, out WorldChunk containing, out int cellID))
         {
-            if (containing.element[cellID] != ElementManager.EMPTY)
-                return;
-            if (containing.parentMatrix.SpawnCell(fireType, containing, cellID))
-                containing.SetMovedWithFrame(cellID);
+            if (containing.element[cellID] == ElementManager.EMPTY)
+                if (containing.parentMatrix.SpawnCell(fireType, containing, cellID))
+                {
+                    containing.burningIntensity[cellID] = spawnIntensity;
+                    containing.SetMovedWithFrame(cellID);
+                }
         }
         if (caller.TryGetCell(x + 1, y, out containing, out cellID))
         {
-            if (containing.element[cellID] != ElementManager.EMPTY)
-                return;
-            if (containing.parentMatrix.SpawnCell(fireType, containing, cellID))
-                containing.SetMovedWithFrame(cellID);
+            if (containing.element[cellID] == ElementManager.EMPTY)
+                if (containing.parentMatrix.SpawnCell(fireType, containing, cellID))
+                {
+                    containing.burningIntensity[cellID] = spawnIntensity;
+                    containing.SetMovedWithFrame(cellID);
+                }
         }
         if (caller.TryGetCell(x - 1, y, out containing, out cellID))
         {
-            if (containing.element[cellID] != ElementManager.EMPTY)
-                return;
-            if (containing.parentMatrix.SpawnCell(fireType, containing, cellID))
-                containing.SetMovedWithFrame(cellID);
+            if (containing.element[cellID] == ElementManager.EMPTY)
+                if (containing.parentMatrix.SpawnCell(fireType, containing, cellID))
+                {
+                    containing.burningIntensity[cellID] = spawnIntensity;
+                    containing.SetMovedWithFrame(cellID);
+                }
         }
     }
-    public static void TrySpawnFlameAroundSameChunk(in WorldChunk caller, in int x, in int y, in int fireType)
+    public static void TrySpawnFlameAroundSameChunk(in WorldChunk caller, in int x, in int y, in int fireType, in byte intensity)
     {
+        byte spawnIntensity = (byte)Math.Max(0, intensity - 1);
         int upID = caller.GetCellIndex(x, y + 1);
         int leftID = caller.GetCellIndex(x - 1, y);
         int rightID = caller.GetCellIndex(x + 1, y);
         if (caller.element[upID] == ElementManager.EMPTY && 
             caller.parentMatrix.SpawnCell(fireType, caller, in upID))
         {
+            caller.burningIntensity[upID] = spawnIntensity;
             caller.SetMovedWithFrame(upID);
         }
         if (caller.element[leftID] == ElementManager.EMPTY &&
             caller.parentMatrix.SpawnCell(fireType, caller, in leftID))
         {
+            caller.burningIntensity[leftID] = spawnIntensity;
             caller.SetMovedWithFrame(leftID);
         }
         if (caller.element[rightID] == ElementManager.EMPTY &&
             caller.parentMatrix.SpawnCell(fireType, caller, in rightID))
         {
+            caller.burningIntensity[rightID] = spawnIntensity;
             caller.SetMovedWithFrame(rightID);
         }
     }

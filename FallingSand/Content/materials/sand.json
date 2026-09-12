@@ -12,6 +12,8 @@
 		"liquid_inertialResistance": 10,
 		"liquid_friction": 10,
 
+		"can_be_stained": true,
+
 		"graphics": {
 			"color": "ffd5b971"
 		}

@@ -58,5 +58,21 @@
 		"graphics": {
 			"color": "ff201c13"
 		}
+	},
+	{
+		"parent": "oil",
+		"inheritReactions": false,
+		"internalName": "super_oil",
+		"colorCode": "ffab7a1d",
+		"density": 0.6,
+
+		"hp": 3,
+		"liquid_inertialResistance": 5,
+
+		"fire_temperature": 5,
+
+		"graphics": {
+			"color": "ffab7a1d"
+		}
 	}
 ]

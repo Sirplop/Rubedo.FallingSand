@@ -13,8 +13,24 @@
 		"liquid_inertialResistance": 50,
 		"liquid_friction": 40,
 
+		"can_be_stained": true,
+
 		"graphics": {
 			"color": "ff666666"
+		}
+	},
+	{
+		"parent": "stone",
+		"internalName": "wood",
+		"colorCode": "ff774d1c",
+		"density": 20,
+		"hp": 5,
+
+		"fire_temperature": 100,
+		"fire_requiresAir": true,
+
+		"graphics": {
+			"color": "ff774d1c"
 		}
 	}
 ]

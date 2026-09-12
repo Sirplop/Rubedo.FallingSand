@@ -30,16 +30,20 @@ public static class ElementManager
     public const int FREE_FALLING_THRESHOLD = 5; //number of frames the pixel must not move to reset free falling.
     public const int EMPTY = 0; //makes comparing to element 0 more obvious.
 
-    public const byte FIRE_SPAWN_CHANCE = 25; //chance fire spawns a fire cell above itself if it's empty.
+    public const byte FIRE_SPAWN_CHANCE = 25; //chance fire spawns a fire cell around itself if it's empty. 
+    public const byte FIRE_FIZZLE_CHANCE = 5; //chance that fire turns into another material when it fizzles
     public const byte FIRE_EXTINQUISH_CHANCE = 25; //chance per frame fire is extinguished when buried.
-    public const byte FIRE_IGNITE_CHANCE = 4;
 
     public const byte FIRE_MAX_INTENSITY = 15;
     public const byte FIRE_INTENSITY_GAIN_CHANCE = 12;             // % per tick to gain intensity
     public const byte FIRE_INTENSITY_GAIN_CHANCE_AIR = 8;        // % added per adjacent empty cell
     public const byte FIRE_INTENSITY_GAIN_CHANCE_NEIGHBOR = 2;  // % added per avg point of neighbor intensity
     public const byte FIRE_INTENSITY_LOSE_CHANCE = 6;             // % per tick, floor chance to cool off
-    public const byte FIRE_INTENSITY_LOSE_CHANCE_AIR = 6;         // % added per non-empty (smothering) neighbor
+    public const byte FIRE_INTENSITY_LOSE_CHANCE_AIR = 7;         // % added per non-empty (smothering) neighbor
+
+    public const byte FIRE_START_INTENSITY = 10;                 // intensity a freshly spawned fire cell begins with
+    public const byte FIRE_DECAY_THRESHOLD = 25;                // base % gate; fire decays hp when Percent() > threshold
+    public const byte FIRE_DECAY_THRESHOLD_INTENSITY = 2;        // threshold raised per point of intensity (hotter fire decays slower)
 
     public static bool Loaded { get; private set; }
 
@@ -58,12 +62,14 @@ public static class ElementManager
     public static float[]   density;            //density of this material
     public static float[]   hp;                 //base health of this material
     public static int[]     hardness;            //hardness of this material
+    public static float[]   lifetime;           //lifetime in seconds of this material. 0 means it exists forever.
 
     public static Color[] color;                //Actual color of this material when spawned.
     public static string[] texture;             //Default texture for a material.
     public static bool[] isGradient;            //is this a gradient texture?
     public static Color[][] gradient_color;     //some elements change color over time, this is their gradient maps.
 
+    public static bool[] canBeStained;          //can this element be stained?
     public static bool[] stains;                //does this element stain?
     public static Color[] stainColor;           //what color does this element stain to?
 
@@ -114,12 +120,14 @@ public static class ElementManager
         density = new float[count];
         hp = new float[count];
         hardness = new int[count];
+        lifetime = new float[count];
 
         color = new Color[count];
         texture = new string[count];
         isGradient = new bool[count];
         gradient_color = new Color[count][];
 
+        canBeStained = new bool[count];
         stains = new bool[count];
         stainColor = new Color[count];
 
@@ -143,11 +151,16 @@ public static class ElementManager
         density[0] = 0;
         hp[0] = 0;
         hardness[0] = 0;
+        lifetime[0] = 0;
 
         color[0] = Color.Transparent;
         texture[0] = "";
         isGradient[0] = false;
         gradient_color[0] = Array.Empty<Color>();
+
+        canBeStained[0] = false;
+        stains[0] = false;
+        stainColor[0] = Color.Transparent;
 
         liquid_isStatic[0] = true;
         liquid_isSand[0] = false;
@@ -188,6 +201,7 @@ public static class ElementManager
             density[i] = element.density;
             hp[i] = element.hp;
             hardness[i] = element.hardness;
+            lifetime[i] = element.lifetime;
 
             color[i] = element.color;
             texture[i] = element.textureTarget;
@@ -212,6 +226,7 @@ public static class ElementManager
                 isGradient[i] = false;
             }
 
+            canBeStained[i] = element.canBeStained;
             stains[i] = element.stains;
             stainColor[i] = element.stainColor;
 
@@ -486,7 +501,7 @@ public static class ElementManager
         }
     }
 
-    public static Color SampleGradient(int element, float life, ref Squirrel3 rnd)
+    public static Color SampleGradient(in int element, in float percent, ref Squirrel3 rnd)
     {
         switch (typeLookup[element])
         {
@@ -496,9 +511,8 @@ public static class ElementManager
             case Type.PHYSICS_SOLID:
                 break;
             case Type.FIRE:
-                float timer = hp[element];
                 int count = gradient_color[element].Length;
-                int colorIndex = Rubedo.Lib.Math.FloorToInt(Rubedo.Lib.Math.Mix(count - 1, 0, Rubedo.Lib.Math.Clamp(life / timer, 0, 1)));
+                int colorIndex = Rubedo.Lib.Math.FloorToInt(Rubedo.Lib.Math.Mix(count - 1, 0, Rubedo.Lib.Math.Clamp(percent, 0, 1)));
                 Color color = gradient_color[element][colorIndex];
                 return color * rnd.Range(0.75f, 1.25f);
         }

@@ -4,6 +4,7 @@
 		"cellType": "gas",
 		"colorCode": "ff4d4d4d",
 		"density": 0.6,
+		"lifetime": 5,
 
 		"liquid_isSand": true,
 		"liquid_maxSpeed": 5,

@@ -259,11 +259,14 @@ public class SandWorld : RenderableComponent
 
         chunk.velocity[cellID].Zero();
         chunk.color[cellID] = ElementManager.GetNewCellColor(element, ref chunk.chunkRNG);
+        chunk.stain[cellID] = WorldChunk.ShortColor.Clear;
         chunk.hp[cellID].Value = ElementManager.hp[element];
+        chunk.lifetime[cellID] = ElementManager.lifetime[element];
 
         if (ElementManager.typeLookup[element] == ElementManager.Type.FIRE)
         {
             chunk.burnFireType[cellID] = element;
+            chunk.burningIntensity[cellID] = ElementManager.FIRE_START_INTENSITY;
         }
         else
         {
@@ -287,11 +290,14 @@ public class SandWorld : RenderableComponent
 
         chunk.velocity[cellID].Zero();
         chunk.color[cellID] = ElementManager.GetNewCellColor(element, ref chunk.chunkRNG);
+        chunk.stain[cellID] = WorldChunk.ShortColor.Clear;
         chunk.hp[cellID].Value = ElementManager.hp[element];
+        chunk.lifetime[cellID] = ElementManager.lifetime[element];
 
         if (ElementManager.typeLookup[element] == ElementManager.Type.FIRE)
         {
             chunk.burnFireType[cellID] = element;
+            chunk.burningIntensity[cellID] = ElementManager.FIRE_START_INTENSITY;
         }
         else
         {
@@ -320,11 +326,13 @@ public class SandWorld : RenderableComponent
         chunk.element[cellID] = 0;
         ref WorldChunk.Moving moving = ref chunk.moving[cellID];
         moving.IsMoving = true;
-        moving.MovingCount = 0; //naughty naughty, mutating a struct...
+        moving.MovingCount = 0;
 
         chunk.velocity[cellID].Zero();
         chunk.color[cellID] = ElementManager.colorCode[ElementManager.EMPTY];
+        chunk.stain[cellID] = WorldChunk.ShortColor.Clear;
         chunk.hp[cellID].Zero();
+        chunk.lifetime[cellID] = 0;
         chunk.burnFireType[cellID] = ElementManager.EMPTY;
 
         chunk.ThreadEnvelop(cellID);
@@ -336,11 +344,13 @@ public class SandWorld : RenderableComponent
         chunk.element[cellID] = 0;
         ref WorldChunk.Moving moving = ref chunk.moving[cellID];
         moving.IsMoving = true;
-        moving.MovingCount = 0; //naughty naughty, mutating a struct...
+        moving.MovingCount = 0;
 
         chunk.velocity[cellID].Zero();
         chunk.color[cellID] = ElementManager.colorCode[ElementManager.EMPTY];
+        chunk.stain[cellID] = WorldChunk.ShortColor.Clear;
         chunk.hp[cellID].Zero();
+        chunk.lifetime[cellID] = 0;
         chunk.burnFireType[cellID] = ElementManager.EMPTY;
 
         chunk.ThreadEnvelop(cellID);

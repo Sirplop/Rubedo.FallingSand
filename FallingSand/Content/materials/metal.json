@@ -13,6 +13,8 @@
 		"liquid_inertialResistance": 50,
 		"liquid_friction": 40,
 
+		"can_be_stained": true,
+
 		"graphics": {
 			"color": "ffaaaaaa"
 		}
@@ -24,6 +26,8 @@
 		"density": 80,
 		"liquid_isStatic": false,
 		"liquid_isSand": false,
+
+		"can_be_stained": false,
 
 		"graphics": {
 			"color": "ffaa9999"

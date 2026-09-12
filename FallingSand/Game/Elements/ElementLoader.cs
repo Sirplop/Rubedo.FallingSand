@@ -184,6 +184,10 @@ public static class ElementLoader
                 }
             }
 
+            if (CheckValue(jsonObj, "can_be_stained", out element.canBeStained))
+            {
+                element.def_can_be_stained = true;
+            }
             if (CheckValue(jsonObj, "stains", out element.stains))
             {
                 element.def_stains = true;
@@ -234,6 +238,11 @@ public static class ElementLoader
             {
                 element.hardness = hardness;
                 element.def_hardness = true;
+            }
+            if (CheckValue(jsonObj, "lifetime", out float lifetime))
+            {
+                element.lifetime = lifetime;
+                element.def_lifetime = true;
             }
 
             if (CheckValue(jsonObj, "liquid_isSand", out bool isSand))

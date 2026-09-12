@@ -46,10 +46,11 @@ public class WorldState : GameState
     private readonly KeyCondition pauseSim = new KeyCondition(Keys.P);
     private readonly KeyCondition stepSim = new KeyCondition(Keys.O);
     private readonly KeyCondition clearAll = new KeyCondition(Keys.Tab);
-    private readonly AllCondition spawnCheckerboard = new AllCondition(new KeyCondition(Keys.Z), new NotCondition(new KeyCondition(Keys.LeftShift, true)), new NotCondition(new KeyCondition(Keys.LeftControl, true)));
+    private readonly AllCondition spawnCheckerboard = new AllCondition(new KeyCondition(Keys.Z), new NotCondition(new KeyCondition(Keys.LeftShift, true)), new NotCondition(new KeyCondition(Keys.LeftControl, true)), new NotCondition(new KeyCondition(Keys.LeftAlt, true)));
     private readonly AllCondition spawnRandomCheckerboard = new AllCondition(new KeyCondition(Keys.Z), new KeyCondition(Keys.LeftShift, true), new NotCondition(new KeyCondition(Keys.LeftControl, true)));
     private readonly AllCondition spawnTopHalf = new AllCondition(new KeyCondition(Keys.Z), new KeyCondition(Keys.LeftControl, true), new NotCondition(new KeyCondition(Keys.LeftShift, true)));
     private readonly AllCondition spawnRandomTopHalf = new AllCondition(new KeyCondition(Keys.Z), new KeyCondition(Keys.LeftControl, true), new KeyCondition(Keys.LeftShift, true));
+    private readonly AllCondition spawnBottomHalf = new AllCondition(new KeyCondition(Keys.Z), new KeyCondition(Keys.LeftAlt, true), new NotCondition(new KeyCondition(Keys.LeftShift, true)));
     private readonly KeyCondition toggleCells = new KeyCondition(Keys.C);
     private readonly KeyCondition toggleRects = new KeyCondition(Keys.V);
     private readonly KeyCondition togglePosition = new KeyCondition(Keys.B);
@@ -321,6 +322,10 @@ public class WorldState : GameState
         {
             SpawnTopHalf(false);
         }
+        if (spawnBottomHalf.Pressed())
+        {
+            SpawnBottomHalf(false);
+        }
         if (spawnRandomTopHalf.Pressed())
         {
             SpawnTopHalf(true);
@@ -423,6 +428,35 @@ public class WorldState : GameState
             {
                 int yLevel = region.RegionY + (y * world.chunkSize);
                 if (yLevel < worldHalf)
+                    continue;
+                for (int x = 0; x < size; x++)
+                {
+                    WorldChunk chunk = region.GetChunk(region.RegionX + (x * world.chunkSize), yLevel);
+                    for (int z = 0; z < chunk.indexSize; z++)
+                    {
+                        world.SpawnCell(random ? elements[Rubedo.Lib.Random.Range(0, b)] : selectedElement, chunk, z);
+                    }
+                }
+            }
+        }
+    }
+    public void SpawnBottomHalf(bool random)
+    {
+        int[] elements = new int[ElementManager.elementsByName.Values.Count];
+        int b = 0;
+        foreach (int el in ElementManager.elementsByName.Values)
+        {
+            elements[b++] = el;
+        }
+        int size = world.chunksPerRegion;
+        int worldHalf = world.WorldRect.Bottom - (world.WorldRect.Height / 2);
+        for (int i = 0; i < world.regions.Count; i++)
+        {
+            WorldRegion region = world.regions[i];
+            for (int y = 0; y < size; y++)
+            {
+                int yLevel = region.RegionY + (y * world.chunkSize);
+                if (yLevel > worldHalf)
                     continue;
                 for (int x = 0; x < size; x++)
                 {
