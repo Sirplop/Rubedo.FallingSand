@@ -1,5 +1,4 @@
 ﻿using FallingSand.Game.World;
-using Loyc.Collections;
 using Microsoft.Xna.Framework;
 using NLog.Targets;
 using Rubedo;
@@ -859,7 +858,55 @@ public static class CellBehaviour
         }
         return false;
     }
-    
+    public static bool TryRiseMulti(ref WorldChunk caller, in int x, in int y, ref int actorID, in int distance)
+    {
+        bool didMove = false;
+        for (int i = 1; i <= distance; i++)
+        {
+            int nY = y + i;
+            int curY = y + i - 1;
+            if (caller.TryGetCell(in x, in nY, out WorldChunk targetChunk, out int targetID))
+            {
+                ActResult actRes = ActOnCell(ref caller, targetChunk, in x, in curY, ref actorID, in x, in nY, ref targetID);
+                switch (actRes)
+                {
+                    case ActResult.Move:
+                        didMove = true;
+                        continue;
+                    case ActResult.Reaction:
+                    case ActResult.StopMove:
+                        return true;
+                    case ActResult.Stop:
+                        return didMove;
+                }
+            }
+        }
+        return true; //it wasn't stopped.
+    }
+    public static bool TryRiseMultiSameChunk(in WorldChunk caller, in int x, in int y, ref int actorID, in int distance)
+    {
+        bool didMove = false;
+        for (int i = 1; i <= distance; i++)
+        {
+            int y1 = y + i;
+            int curY = y + i - 1;
+            int upID = caller.GetCellIndex(in x, in y1);
+            ActResult actRes = ActOnCellSameChunk(in caller, in x, in curY, ref actorID, in x, in y1, in upID);
+            switch (actRes)
+            {
+                case ActResult.Move:
+                    didMove = true;
+                    continue;
+                case ActResult.Reaction:
+                case ActResult.StopMove:
+                    return true;
+                case ActResult.Stop:
+                    return didMove;
+            }
+        }
+        return true; //it wasn't stopped.
+    }
+
     public static bool TryMoveSideOne(ref WorldChunk caller, in int x, in int y, ref int actorID)
     {
         Velocity velocity = caller.velocity[actorID];
@@ -1426,7 +1473,7 @@ public static class CellBehaviour
                     airCount += hasAir[Neighbors25Index[i][v]];
                 }
                 float airFactor = airCount + 12f;
-                float chance = tempMargin * 0.0075f * intensity * airFactor;
+                float chance = tempMargin * 0.01f * intensity * airFactor;
 
                 if (caller.chunkRNG.Range(0f, 100f) < chance)
                 {
@@ -1492,7 +1539,7 @@ public static class CellBehaviour
                 airCount += hasAir[Neighbors25Index[i][v]];
             }
             float airFactor = airCount + 12f;
-            float chance = tempMargin * 0.0075f * intensity * airFactor;
+            float chance = tempMargin * 0.01f * intensity * airFactor;
 
             if (caller.chunkRNG.Range(0f, 100f) < chance)
             {

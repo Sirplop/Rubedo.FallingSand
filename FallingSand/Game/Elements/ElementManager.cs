@@ -1,5 +1,4 @@
 ﻿using FallingSand.Game.World;
-using Loyc;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Content;
 using Microsoft.Xna.Framework.Graphics;
@@ -43,7 +42,7 @@ public static class ElementManager
 
     public const byte FIRE_START_INTENSITY = 10;                 // intensity a freshly spawned fire cell begins with
     public const byte FIRE_DECAY_THRESHOLD = 25;                // base % gate; fire decays hp when Percent() > threshold
-    public const byte FIRE_DECAY_THRESHOLD_INTENSITY = 2;        // threshold raised per point of intensity (hotter fire decays slower)
+    public const byte FIRE_DECAY_THRESHOLD_INTENSITY = 3;        // threshold raised per point of intensity (hotter fire decays slower)
 
     public static bool Loaded { get; private set; }
 

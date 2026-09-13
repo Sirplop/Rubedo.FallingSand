@@ -33,7 +33,7 @@ public static class ElementBehaviour
     private static bool IsNotBorderCellFire(in int x, in int y, in int chunkSize)
     {
         //fire cares about its immediate halo.
-        return x > 1 && x < chunkSize - 2 && y > 1 && y < chunkSize - 2;
+        return x > 1 && x < chunkSize - 2 && y > 1 && y < chunkSize - 3;
     }
 
     public static void StepLiquid(in WorldChunk caller, in int x, in int y, int cellID, in int elementID)
@@ -263,12 +263,12 @@ public static class ElementBehaviour
             {
                 if (CellBehaviour.TryDiagonalUpSameChunk(in caller, in x, in y, ref cellID))
                     return;
-                if (CellBehaviour.TryRiseSameChunk(in caller, in x, in y, ref cellID))
+                if (CellBehaviour.TryRiseMultiSameChunk(in caller, in x, in y, ref cellID, 2))
                     return;
             }
             else
             {
-                if (CellBehaviour.TryRiseSameChunk(in caller, in x, in y, ref cellID))
+                if (CellBehaviour.TryRiseMultiSameChunk(in caller, in x, in y, ref cellID, 2))
                     return;
                 if (CellBehaviour.TryDiagonalUpSameChunk(in caller, in x, in y, ref cellID))
                     return;
@@ -326,12 +326,12 @@ public static class ElementBehaviour
             {
                 if (CellBehaviour.TryDiagonalUp(ref callerNonRef, in x, in y, ref cellID))
                     return;
-                if (CellBehaviour.TryRise(ref callerNonRef, in x, in y, ref cellID))
+                if (CellBehaviour.TryRiseMulti(ref callerNonRef, in x, in y, ref cellID, 2))
                     return;
             }
             else
             {
-                if (CellBehaviour.TryRise(ref callerNonRef, in x, in y, ref cellID))
+                if (CellBehaviour.TryRiseMulti(ref callerNonRef, in x, in y, ref cellID, 2))
                     return;
                 if (CellBehaviour.TryDiagonalUp(ref callerNonRef, in x, in y, ref cellID))
                     return;

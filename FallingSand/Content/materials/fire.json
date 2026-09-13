@@ -4,7 +4,7 @@
     "cellType": "fire",
     "colorCode": "ffffff00",
     "density": 10,
-    "hp": 0.5,
+    "hp": 0.15,
     "tags": "[fire]",
 
     "fire_temperature": 150,
@@ -24,7 +24,7 @@
     "cellType": "fire",
     "colorCode": "ff0000ff",
     "density": 10,
-    "hp": 0.5,
+    "hp": 0.25,
     "tags": "[fire]",
 
     "fire_temperature": 200,

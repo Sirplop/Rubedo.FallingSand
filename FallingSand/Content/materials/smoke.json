@@ -23,6 +23,7 @@
 		"density": 0.5,
 		"hp": 0.25,
 		"liquid_inertialResistance": 85,
+		"lifetime": 0,
 
 		"fire_temperature": 1,
 		"fire_requiresAir": false,
